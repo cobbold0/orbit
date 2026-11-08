@@ -572,6 +572,213 @@ export class DeterministicFallbackProvider implements AIProvider {
       };
     }
 
+    // Case 2.5: Specific past or future date query (queriedDateSchedule)
+    if (userContext.queriedDateSchedule) {
+      const q = userContext.queriedDateSchedule;
+      const facts: string[] = [
+        `Target date: ${q.dayName}, ${q.queryDateStr} (${
+          q.isPast ? "past" : q.isFuture ? "future" : "today"
+        })`,
+      ];
+
+      if (q.isPast) {
+        let replyMarkdown = "";
+        let advice = "Reflecting on your historical progress helps guide future focus.";
+        const sections: string[] = [];
+
+        if (q.pastActivities.length > 0) {
+          const actLines = q.pastActivities.map(
+            (a) =>
+              `• **${a.title}**${
+                a.durationMinutes ? ` (${a.durationMinutes}m)` : ""
+              }${a.lifeAreaName ? ` under ${a.lifeAreaName}` : ""}`
+          );
+          sections.push(`**Logged Activities:**\n${actLines.join("\n")}`);
+          facts.push(`${q.pastActivities.length} logged activity session(s).`);
+        }
+
+        if (q.completedTasks.length > 0) {
+          const taskLines = q.completedTasks.map(
+            (t) => `• **${t.title}** (${t.lifeAreaName})`
+          );
+          sections.push(`**Completed Tasks:**\n${taskLines.join("\n")}`);
+          facts.push(`${q.completedTasks.length} completed task(s).`);
+        }
+
+        if (sections.length > 0) {
+          replyMarkdown = `On ${q.dayName}, ${q.queryDateStr}, here is what was recorded:\n\n${sections.join(
+            "\n\n"
+          )}`;
+          advice = "Consistent logging provides clear historical visibility.";
+        } else {
+          replyMarkdown = `On ${q.dayName}, ${q.queryDateStr}, you had no logged activities or completed tasks recorded in Orbit.`;
+          advice = "Orbit preserves entries whenever you log them.";
+        }
+
+        return {
+          replyMarkdown,
+          citedFacts: facts,
+          assumptionsOrSuggestions: [advice],
+          proposedMutations: [],
+          providerUsed: "DETERMINISTIC_FALLBACK",
+        };
+      }
+
+      // Future or queried date
+      const allRoutines = q.routinesAndLocations;
+      const scheduledTasks = q.scheduledTasks;
+
+      let replyMarkdown = "";
+      let advice = "";
+
+      if (allRoutines.length === 0 && scheduledTasks.length === 0) {
+        replyMarkdown = `On ${q.dayName}, ${q.queryDateStr}, your calendar is completely open! No routines, travel, or tasks are currently scheduled for that date.`;
+        advice = "Plenty of breathing room to allocate as needed.";
+      } else {
+        const sections: string[] = [];
+        if (allRoutines.length > 0) {
+          const rLines = allRoutines.map((r) => {
+            const loc = r.physicalLocation ? ` at **${r.physicalLocation}**` : "";
+            return `• **${r.title}**${loc} (${r.startTime} - ${r.endTime})`;
+          });
+          sections.push(`**Routines & Places to be:**\n${rLines.join("\n")}`);
+          facts.push(
+            ...allRoutines.map((r) => `${r.title} (${r.startTime}-${r.endTime})`)
+          );
+        }
+        if (scheduledTasks.length > 0) {
+          const tLines = scheduledTasks.map(
+            (t) =>
+              `• **${t.title}** (${t.lifeAreaName}${
+                t.startTime ? `, ${t.startTime}` : ""
+              })`
+          );
+          sections.push(`**Scheduled Commitments:**\n${tLines.join("\n")}`);
+          facts.push(...scheduledTasks.map((t) => `${t.title}`));
+        }
+        replyMarkdown = `Here is what is scheduled for ${q.dayName}, ${q.queryDateStr}:\n\n${sections.join(
+          "\n\n"
+        )}`;
+        advice = `Review commitments for ${q.dayName} to prepare in advance.`;
+      }
+
+      return {
+        replyMarkdown,
+        citedFacts: facts,
+        assumptionsOrSuggestions: [advice],
+        proposedMutations: [],
+        providerUsed: "DETERMINISTIC_FALLBACK",
+      };
+    }
+
+    // Case 2.6: Milestones or project progress query
+    if (
+      /\b(?:milestones?|project\s+progress|journey\s+progress|how\s+far)\b/i.test(
+        lower
+      )
+    ) {
+      for (const proj of userContext.activeProjects) {
+        if (
+          lower.includes(proj.title.toLowerCase()) ||
+          lower.includes(proj.lifeAreaSlug)
+        ) {
+          const completed = proj.milestones.filter(
+            (m) => m.status === "COMPLETED"
+          );
+          const pending = proj.milestones.filter(
+            (m) => m.status !== "COMPLETED"
+          );
+
+          let replyMarkdown = "";
+          if (proj.milestones.length === 0) {
+            replyMarkdown = `Project **${proj.title}** (${proj.lifeAreaName}) currently has no milestones set up yet.\n\nYou can add milestones from the Projects screen anytime.`;
+          } else {
+            const mList = proj.milestones
+              .map(
+                (m) =>
+                  `• ${m.status === "COMPLETED" ? "✅" : "⏳"} **${
+                    m.title
+                  }** (${m.status.toLowerCase()})`
+              )
+              .join("\n");
+            const nextMilestone = pending[0]
+              ? `\n\nNext milestone to tackle: **${pending[0].title}**.`
+              : "\n\nAll milestones for this project are complete!";
+            replyMarkdown = `Here is the milestone progress for **${proj.title}** (${proj.lifeAreaName}):\n\n${mList}${nextMilestone}`;
+          }
+
+          return {
+            replyMarkdown,
+            citedFacts: [
+              `Project "${proj.title}" has ${completed.length} completed and ${pending.length} pending milestone(s).`,
+            ],
+            assumptionsOrSuggestions: [
+              pending[0]
+                ? `Focus on "${pending[0].title}" as your next key milestone.`
+                : "Great milestone completion rate on this project.",
+            ],
+            proposedMutations: [],
+            providerUsed: "DETERMINISTIC_FALLBACK",
+          };
+        }
+      }
+    }
+
+    // Case 2.7: Accomplishments / Completed tasks query
+    if (
+      /\b(?:what\s+did\s+i\s+(?:accomplish|complete|finish)|accomplishments?|finished\s+today|completed\s+today)\b/i.test(
+        lower
+      )
+    ) {
+      const todayDone = userContext.completedTasksToday;
+      let replyMarkdown = "";
+      let advice = "";
+
+      if (todayDone.length > 0) {
+        const list = todayDone
+          .map((t) => `• ✅ **${t.title}** (${t.lifeAreaName})`)
+          .join("\n");
+        replyMarkdown = `Here is what you accomplished today:\n\n${list}\n\nFantastic job getting these across the finish line! Celebrating your wins keeps your momentum strong.`;
+        advice = `Great momentum with ${todayDone.length} completed task(s) today.`;
+      } else {
+        replyMarkdown = `You haven't marked any tasks as completed today yet.\n\nWhenever you finish a task, check it off or ask me to mark it complete to log your win!`;
+        advice = "Pick an open task to complete and lock in today's first win.";
+      }
+
+      return {
+        replyMarkdown,
+        citedFacts: [`${todayDone.length} task(s) completed today.`],
+        assumptionsOrSuggestions: [advice],
+        proposedMutations: [],
+        providerUsed: "DETERMINISTIC_FALLBACK",
+      };
+    }
+
+    // Case 2.8: Notes / Memory Inbox query
+    if (
+      /\b(?:what\s+did\s+i\s+(?:note|write|capture)|my\s+notes|recent\s+notes|inbox\s+notes)\b/i.test(
+        lower
+      )
+    ) {
+      if (userContext.recentInboxNotes.length > 0) {
+        const list = userContext.recentInboxNotes
+          .slice(0, 4)
+          .map((n) => `• **${n.title || "Note"}**: ${n.summary || n.rawSnippet}`)
+          .join("\n");
+        return {
+          replyMarkdown: `Here are your recent captured notes:\n\n${list}\n\nYou can review and convert actionable items into tasks anytime in your Memory Inbox.`,
+          citedFacts: [
+            `${userContext.recentInboxNotes.length} recent note(s) in inbox.`,
+          ],
+          assumptionsOrSuggestions: [
+            "Regularly reviewing notes keeps your commitments organized.",
+          ],
+          proposedMutations: [],
+          providerUsed: "DETERMINISTIC_FALLBACK",
+        };
+      }
+    }
+
     // Case 3: Schedule, Agenda, Tomorrow, Today, or Places to be query
     const isTomorrow = /\btomorrow\b/i.test(lower);
     const isLocationQuery =
@@ -873,6 +1080,7 @@ ${rawContent}
 
 YOUR TONE & HUMANIZATION:
 - Speak warmly and conversationally, like a trusted, caring chief of staff.
+- If userContext.userName is provided (e.g. "${userContext.userName ?? ""}"), address the user naturally by name when appropriate.
 - When the user asks "Do I have anything today?", "What should I focus on?", or questions about their day:
   - Do NOT provide a cold, robotic dump of statistics or raw counts.
   - Humanize the response: explain what is coming up in plain, natural language, celebrate if their day has breathing room, and offer thoughtful, practical advice on what to tackle first and how to pace themselves.
@@ -885,18 +1093,25 @@ CRITICAL SAFETY & GROUNDING RULES:
 3. Distinguish confirmed facts ("citedFacts") from recommendations or suggestions ("assumptionsOrSuggestions").
 4. Physical location, employer, active project, and availability are independent.
 5. Use short, direct, natural sentences. Never use double dashes (--) or em-dashes.
-6. SCHEDULE, ROUTINES, LOCATIONS & "WHERE AM I GOING" RULES:
-   - Orbit tracks both scheduled tasks AND recurring routines/places to be in the user context:
-     * Check "todaySchedule" and "tomorrowSchedule" (which contain "routinesAndLocations" and "scheduledTasks").
-     * Routines in "routinesAndLocations" and "declaredRoutines" specify "physicalLocation" (e.g. office, gym, client site, company premises), "startTime", "endTime", "title", and "lifeAreaName".
-   - When the user asks:
-     * "Where am I going tomorrow?", "Where do I have to be tomorrow?", "What do I have tomorrow?"
-     * "Where am I going today?", "Where do I have to be today?", "What do I have today?"
-     * "What's my schedule?", "Where do I need to be?", "Do I have anywhere to go?"
-   - Read directly from "tomorrowSchedule" (when asking about tomorrow) or "todaySchedule" (when asking about today).
-   - If they have a routine with a "physicalLocation", explicitly tell them where they are going and the time window (e.g., "Tomorrow you are heading to [physicalLocation] for [title] from [startTime] to [endTime]").
-   - If they have scheduled tasks or routines without physical locations, summarize them clearly by time and area.
-   - If they have no routines or scheduled tasks on that day, tell them warmly that their schedule is completely free and they don't have anywhere they need to go.
+6. CHRONOLOGICAL, CALENDAR & SCHEDULE INTELLIGENCE:
+   Orbit has rich multi-horizon time intelligence:
+   a. Specific Query Date ("queriedDateSchedule"):
+      When the user asks about an arbitrary date (e.g. "what will happen on the 24th December?", "what did I do on January 1st, 2024?", "what's happening on Wednesday?"), Orbit inspects "queriedDateSchedule".
+      - If "isPast" is true: cite recorded activities ("pastActivities") and completed tasks ("completedTasks") for that historical date. If empty, explain warmly that nothing was logged on that date.
+      - If "isFuture" is true (or current date): cite routines, places to be ("routinesAndLocations" including start/end times and physical locations), and scheduled commitments ("scheduledTasks"). If empty, celebrate that their calendar is open on that date.
+   b. Today & Tomorrow ("todaySchedule" & "tomorrowSchedule"):
+      - Routines in "routinesAndLocations" specify "physicalLocation" (e.g. office, gym, client site, company premises), "startTime", "endTime", "title", and "lifeAreaName".
+      - When asked "Where am I going tomorrow?", "Where do I have to be?", "What do I have tomorrow/today?", report both physical locations and scheduled tasks clearly.
+   c. Upcoming 7-day Horizon ("upcomingWeekSchedule"):
+      - Contains a full 7-day breakdown of routines, locations, and tasks for questions like "What does my week look like?".
+   d. Milestones & Projects ("activeProjects"):
+      - Each project includes "milestones" with status ("PENDING" | "COMPLETED") and target dates. When asked about project progress or milestones, report their completed vs pending milestones and the next milestone to focus on.
+   e. Completed Tasks & Daily Wins ("completedTasksToday" & "recentCompletedTasks"):
+      - When asked "What did I accomplish today?" or about finished tasks, list their completed tasks and celebrate their momentum.
+   f. Captured Notes & Memory Inbox ("recentInboxNotes"):
+      - When asked "What did I note/write/capture?", report their recent thoughts or inbox notes.
+   g. Pending Check-ins ("pendingCheckIns"):
+      - Contains active check-ins awaiting response.
 7. SUPPORTED APP ACTIONS & MUTATION SCHEMAS:
    Orbit is a comprehensive assistant that can control anything in the app across settings, tasks, projects, routines, and activity logging.
    When the user commands an action, populate "proposedMutations" with the corresponding schema:
@@ -917,7 +1132,7 @@ CRITICAL SAFETY & GROUNDING RULES:
       (Note: daysOfWeek uses 1 for Monday through 7 for Sunday)
    g. LOG_ACTIVITY:
       { "mutationKind": "LOG_ACTIVITY", "title": string, "durationMinutes": number, "lifeAreaId"?: string, "lifeAreaName"?: string, "explanation": string }
-7. AMBIGUITY & DISAMBIGUATION RULES:
+8. AMBIGUITY & DISAMBIGUATION RULES:
    - When the user asks to create an entity (task, project, routine) mentioning a topic, company, or entity (e.g., "create a task for KFC", "add a routine for badminton") that does NOT clearly match an existing Life Area or Project:
      * DO NOT create the entity blindly under an unrelated area!
      * Ask the user for clarification in "replyMarkdown": e.g. "I'd love to help with KFC! Which Life Area should this belong to (e.g. Work, Personal), or would you like to set up KFC as a new Life Area or Project first?"

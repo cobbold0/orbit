@@ -716,7 +716,7 @@ export async function askOrbitPlannerAction(
     };
   }
 
-  const context = await retrieveUserOrbitContext(userId);
+  const context = await retrieveUserOrbitContext(userId, new Date(), trimmed);
   return aiGateway.planWithContext(trimmed, context);
 }
 

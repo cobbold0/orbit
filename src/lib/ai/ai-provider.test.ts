@@ -7,6 +7,7 @@ import type { UserOrbitContext } from "@/modules/ai/context-retriever";
 
 const sampleContext: UserOrbitContext = {
   userId: "user_1",
+  userName: "Alex",
   ianaTimeZone: "Africa/Lagos",
   localDate: "2026-11-08", // Sunday
   localTimeHHmm: "14:00",
@@ -41,6 +42,8 @@ const sampleContext: UserOrbitContext = {
     ],
     scheduledTasks: [],
   },
+  upcomingWeekSchedule: [],
+  queriedDateSchedule: null,
   userPreferences: {
     declaredWakeTime: "07:30",
     declaredSleepTime: "23:00",
@@ -79,6 +82,14 @@ const sampleContext: UserOrbitContext = {
       lifeAreaId: "area_basilissa",
       lifeAreaSlug: "basilissa",
       lifeAreaName: "Basilissa",
+      milestones: [
+        {
+          id: "m_1",
+          title: "API Integrations",
+          status: "PENDING",
+          sortOrder: 0,
+        },
+      ],
     },
   ],
   openTasks: [
@@ -87,6 +98,8 @@ const sampleContext: UserOrbitContext = {
       title: "Refine Basilissa attendance dashboard exception filters",
       commitmentType: "SCHEDULED",
       status: "NEEDS_CHECKIN",
+      priority: "NORMAL",
+      notes: "Review logs carefully",
       lifeAreaId: "area_basilissa",
       lifeAreaName: "Basilissa",
       lifeAreaSlug: "basilissa",
@@ -100,6 +113,10 @@ const sampleContext: UserOrbitContext = {
       waitingOnPerson: null,
     },
   ],
+  completedTasksToday: [],
+  recentCompletedTasks: [],
+  recentInboxNotes: [],
+  pendingCheckIns: [],
   declaredRoutines: [],
   recentConfirmedActivities: [],
 };
@@ -219,5 +236,146 @@ describe("AI Provider & Memory Extraction Engine", () => {
 
     expect(plan.replyMarkdown).toContain("Engineering Office Shift");
     expect(plan.replyMarkdown).toContain("Basilissa Tech Hub, Accra");
+  });
+
+  it("answers queries for arbitrary future dates using queriedDateSchedule", async () => {
+    const provider = new DeterministicFallbackProvider();
+    const contextWithQueriedDate: UserOrbitContext = {
+      ...sampleContext,
+      queriedDateSchedule: {
+        queryDateStr: "2026-12-24",
+        dayName: "Thursday",
+        isPast: false,
+        isFuture: true,
+        routinesAndLocations: [
+          {
+            title: "Holiday Preparation",
+            kind: "FLEXIBLE_HABIT",
+            physicalLocation: "City Mall",
+            startTime: "14:00",
+            endTime: "16:00",
+            lifeAreaName: "Personal",
+          },
+        ],
+        scheduledTasks: [
+          {
+            title: "Pick up family gifts",
+            lifeAreaName: "Personal",
+            startTime: "16:30",
+            endTime: "17:30",
+          },
+        ],
+        pastActivities: [],
+        completedTasks: [],
+      },
+    };
+
+    const plan = await provider.planWithContext(
+      "What will happen on the 24th December?",
+      contextWithQueriedDate
+    );
+
+    expect(plan.replyMarkdown).toContain("Thursday, 2026-12-24");
+    expect(plan.replyMarkdown).toContain("Holiday Preparation");
+    expect(plan.replyMarkdown).toContain("City Mall");
+    expect(plan.replyMarkdown).toContain("Pick up family gifts");
+  });
+
+  it("answers queries for historical past dates using queriedDateSchedule", async () => {
+    const provider = new DeterministicFallbackProvider();
+    const contextWithPastDate: UserOrbitContext = {
+      ...sampleContext,
+      queriedDateSchedule: {
+        queryDateStr: "2024-01-01",
+        dayName: "Monday",
+        isPast: true,
+        isFuture: false,
+        routinesAndLocations: [],
+        scheduledTasks: [],
+        pastActivities: [
+          {
+            title: "New Year Annual Planning Session",
+            durationMinutes: 120,
+            lifeAreaName: "Personal",
+            startedAtIso: "2024-01-01T10:00:00.000Z",
+          },
+        ],
+        completedTasks: [
+          {
+            title: "Draft 2024 Strategic Roadmap",
+            lifeAreaName: "Basilissa",
+            completedAtIso: "2024-01-01T16:00:00.000Z",
+          },
+        ],
+      },
+    };
+
+    const plan = await provider.planWithContext(
+      "What did I do on January 1st, 2024?",
+      contextWithPastDate
+    );
+
+    expect(plan.replyMarkdown).toContain("Monday, 2024-01-01");
+    expect(plan.replyMarkdown).toContain("New Year Annual Planning Session");
+    expect(plan.replyMarkdown).toContain("Draft 2024 Strategic Roadmap");
+  });
+
+  it("answers queries about project milestones", async () => {
+    const provider = new DeterministicFallbackProvider();
+    const plan = await provider.planWithContext(
+      "What are the milestones for Build Attendance Management System?",
+      sampleContext
+    );
+
+    expect(plan.replyMarkdown).toContain("Build Attendance Management System");
+    expect(plan.replyMarkdown).toContain("API Integrations");
+    expect(plan.replyMarkdown).toContain("Next milestone to tackle");
+  });
+
+  it("answers queries about daily accomplishments", async () => {
+    const provider = new DeterministicFallbackProvider();
+    const contextWithAccomplishments: UserOrbitContext = {
+      ...sampleContext,
+      completedTasksToday: [
+        {
+          id: "task_done_1",
+          title: "Ship Odoo attendance webhooks",
+          lifeAreaName: "Basilissa",
+          completedAtIso: "2026-11-08T12:00:00.000Z",
+        },
+      ],
+    };
+
+    const plan = await provider.planWithContext(
+      "What did I accomplish today?",
+      contextWithAccomplishments
+    );
+
+    expect(plan.replyMarkdown).toContain("Ship Odoo attendance webhooks");
+    expect(plan.replyMarkdown).toContain("accomplished today");
+  });
+
+  it("answers queries about captured notes and thoughts", async () => {
+    const provider = new DeterministicFallbackProvider();
+    const contextWithNotes: UserOrbitContext = {
+      ...sampleContext,
+      recentInboxNotes: [
+        {
+          id: "note_1",
+          title: "Architecture idea",
+          summary: "Use Temporal for offline-first sync engine",
+          rawSnippet: "Temporal offline sync",
+          createdAtIso: "2026-11-08T11:00:00.000Z",
+        },
+      ],
+    };
+
+    const plan = await provider.planWithContext(
+      "What did I note recently?",
+      contextWithNotes
+    );
+
+    expect(plan.replyMarkdown).toContain("Use Temporal for offline-first sync engine");
+    expect(plan.replyMarkdown).toContain("Architecture idea");
   });
 });
