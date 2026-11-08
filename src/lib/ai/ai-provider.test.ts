@@ -11,6 +11,16 @@ const sampleContext: UserOrbitContext = {
   localDate: "2026-11-08", // Sunday
   localTimeHHmm: "14:00",
   isoDayOfWeek: 7,
+  userPreferences: {
+    declaredWakeTime: "07:30",
+    declaredSleepTime: "23:00",
+    quietHoursEnabled: true,
+    quietHoursStart: "22:00",
+    quietHoursEnd: "07:00",
+    checkInFrequency: "BALANCED",
+    maxDailyCheckIns: 3,
+    defaultPreTaskReminderMin: 30,
+  },
   lifeAreas: [
     {
       id: "area_basilissa",
@@ -110,5 +120,51 @@ describe("AI Provider & Memory Extraction Engine", () => {
       expect(mutation.targetDateStr).toBe("2026-11-13");
       expect(mutation.targetTimeStr).toBe("14:00");
     }
+  });
+
+  it("proposes an UPDATE_PREFERENCE mutation when user asks to shift sleeping time", async () => {
+    const provider = new DeterministicFallbackProvider();
+    const plan = await provider.planWithContext(
+      "Shift my sleeping time to 11:30 pm",
+      sampleContext
+    );
+
+    expect(plan.proposedMutations).toHaveLength(1);
+    const mutation = plan.proposedMutations[0]!;
+    expect(mutation.mutationKind).toBe("UPDATE_PREFERENCE");
+    if (mutation.mutationKind === "UPDATE_PREFERENCE") {
+      expect(mutation.declaredSleepTime).toBe("23:30");
+      expect(mutation.explanation).toContain("23:30");
+    }
+  });
+
+  it("proposes a COMPLETE_TASK mutation when user says they finished a task", async () => {
+    const provider = new DeterministicFallbackProvider();
+    const plan = await provider.planWithContext(
+      "I finished the attendance dashboard task",
+      sampleContext
+    );
+
+    expect(plan.proposedMutations).toHaveLength(1);
+    const mutation = plan.proposedMutations[0]!;
+    expect(mutation.mutationKind).toBe("COMPLETE_TASK");
+    if (mutation.mutationKind === "COMPLETE_TASK") {
+      expect(mutation.taskId).toBe("task_dashboard");
+      expect(mutation.taskTitle).toBe(
+        "Refine Basilissa attendance dashboard exception filters"
+      );
+    }
+  });
+
+  it("asks for clarification instead of blindly creating when given an unknown entity like KFC", async () => {
+    const provider = new DeterministicFallbackProvider();
+    const plan = await provider.planWithContext(
+      "Create a task for KFC",
+      sampleContext
+    );
+
+    expect(plan.proposedMutations).toHaveLength(0);
+    expect(plan.replyMarkdown).toContain("KFC");
+    expect(plan.replyMarkdown).toContain("Which Life Area");
   });
 });

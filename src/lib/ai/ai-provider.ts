@@ -42,6 +42,22 @@ export function resolveSupportedGeminiModel(configured?: string): string {
   return trimmed;
 }
 
+function parseTimeString(raw: string, preferEvening = false): string | null {
+  const clean = raw.trim().toLowerCase();
+  const match = clean.match(/^(\d{1,2})(?::(\d{2}))?\s*(am|pm)?$/i);
+  if (!match) return null;
+  let hours = parseInt(match[1]!, 10);
+  const minutes = match[2] ? parseInt(match[2], 10) : 0;
+  const period = match[3]?.toLowerCase();
+
+  if (period === "pm" && hours < 12) hours += 12;
+  else if (period === "am" && hours === 12) hours = 0;
+  else if (!period) {
+    if (preferEvening && hours >= 1 && hours <= 11) hours += 12;
+  }
+  return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}`;
+}
+
 /**
  * Deterministic fallback analyzer that guarantees Orbit's Memory Inbox and
  * Conversational Planner remain 100% functional even when Gemini is unconfigured
@@ -202,6 +218,154 @@ export class DeterministicFallbackProvider implements AIProvider {
     const trimmed = userMessage.trim();
     const lower = trimmed.toLowerCase();
     const todayPlain = Temporal.PlainDate.from(userContext.localDate);
+
+    // Case 0: Preference updates (sleep time, wake time, quiet hours)
+    if (
+      /\b(?:sleep(?:ing)?(?:\s+time)?|bedtime|wake(?:\s+up)?(?:\s+time)?|quiet\s+hours)\b/i.test(
+        lower
+      )
+    ) {
+      let declaredSleepTime: string | null = null;
+      let declaredWakeTime: string | null = null;
+      let quietHoursEnabled: boolean | null = null;
+      let quietHoursStart: string | null = null;
+      let quietHoursEnd: string | null = null;
+      const explanationParts: string[] = [];
+
+      const sleepMatch = lower.match(
+        /(?:sleep(?:ing)?(?:\s+time)?|bedtime).*?(?:to|at)\s*(\d{1,2}(?::\d{2})?\s*(?:am|pm)?)/i
+      );
+      if (sleepMatch?.[1]) {
+        const parsed = parseTimeString(sleepMatch[1], true);
+        if (parsed) {
+          declaredSleepTime = parsed;
+          explanationParts.push(`Shift sleep time to ${parsed}`);
+        }
+      }
+
+      const wakeMatch = lower.match(
+        /(?:wake(?:\s+up)?(?:\s+time)?).*?(?:to|at)\s*(\d{1,2}(?::\d{2})?\s*(?:am|pm)?)/i
+      );
+      if (wakeMatch?.[1]) {
+        const parsed = parseTimeString(wakeMatch[1], false);
+        if (parsed) {
+          declaredWakeTime = parsed;
+          explanationParts.push(`Shift wake time to ${parsed}`);
+        }
+      }
+
+      if (/\bquiet\s+hours\b/i.test(lower)) {
+        if (/\b(?:disable|turn\s+off|off)\b/i.test(lower)) {
+          quietHoursEnabled = false;
+          explanationParts.push("Disable quiet hours");
+        } else if (/\b(?:enable|turn\s+on|on)\b/i.test(lower)) {
+          quietHoursEnabled = true;
+          explanationParts.push("Enable quiet hours");
+        }
+        const rangeMatch = lower.match(
+          /quiet\s+hours.*?(?:from\s*)?(\d{1,2}(?::\d{2})?\s*(?:am|pm)?)\s*(?:to|until|-)\s*(\d{1,2}(?::\d{2})?\s*(?:am|pm)?)/i
+        );
+        if (rangeMatch?.[1] && rangeMatch?.[2]) {
+          const s = parseTimeString(rangeMatch[1], true);
+          const e = parseTimeString(rangeMatch[2], false);
+          if (s && e) {
+            quietHoursStart = s;
+            quietHoursEnd = e;
+            explanationParts.push(`Set quiet hours from ${s} to ${e}`);
+          }
+        }
+      }
+
+      if (explanationParts.length > 0) {
+        const explanation = explanationParts.join(", ");
+        const mutation: ProposedMutation = {
+          mutationKind: "UPDATE_PREFERENCE",
+          declaredSleepTime,
+          declaredWakeTime,
+          quietHoursEnabled,
+          quietHoursStart,
+          quietHoursEnd,
+          explanation,
+        };
+
+        return {
+          replyMarkdown: `I can update your preferences for you: ${explanation}. Confirm below to apply this update.`,
+          citedFacts: [
+            `Current wake time: ${userContext.userPreferences.declaredWakeTime}`,
+            `Current sleep time: ${userContext.userPreferences.declaredSleepTime}`,
+          ],
+          assumptionsOrSuggestions: [
+            `Changes will take effect across your daily briefings and schedules.`,
+          ],
+          proposedMutations: [mutation],
+          providerUsed: "DETERMINISTIC_FALLBACK",
+        };
+      }
+    }
+
+    // Case 0.5: Complete / finish a task
+    if (
+      /\b(?:completed?|finished?|done\s+with|mark(?:\s+as)?\s+(?:done|complete))\b/i.test(
+        lower
+      ) &&
+      userContext.openTasks.length > 0
+    ) {
+      const words = lower
+        .replace(/[^a-z0-9\s]/g, " ")
+        .split(/\s+/)
+        .filter(
+          (w) =>
+            w.length >= 3 &&
+            ![
+              "completed",
+              "complete",
+              "finished",
+              "finish",
+              "done",
+              "mark",
+              "task",
+              "the",
+              "with",
+              "for",
+            ].includes(w)
+        );
+
+      let bestTask = userContext.openTasks[0]!;
+      let bestScore = -1;
+
+      for (const task of userContext.openTasks) {
+        const hay =
+          `${task.title} ${task.lifeAreaName} ${task.projectTitle ?? ""}`.toLowerCase();
+        let score = 0;
+        for (const w of words) {
+          if (hay.includes(w)) score += 2;
+        }
+        if (score > bestScore) {
+          bestScore = score;
+          bestTask = task;
+        }
+      }
+
+      if (bestScore > 0) {
+        const mutation: ProposedMutation = {
+          mutationKind: "COMPLETE_TASK",
+          taskId: bestTask.id,
+          taskTitle: bestTask.title,
+          explanation: `Mark "${bestTask.title}" (${bestTask.lifeAreaName}) as completed.`,
+        };
+        return {
+          replyMarkdown: `Great job on finishing "${bestTask.title}"! Ready to mark it as completed. Confirm below to record your progress.`,
+          citedFacts: [
+            `Matched open task: "${bestTask.title}" under ${bestTask.lifeAreaName}`,
+          ],
+          assumptionsOrSuggestions: [
+            `Completing tasks unlocks mental space for what's next.`,
+          ],
+          proposedMutations: [mutation],
+          providerUsed: "DETERMINISTIC_FALLBACK",
+        };
+      }
+    }
 
     // Case 1: Reschedule / Move an existing task
     // e.g. "I didn't finish the attendance dashboard today. Move it to Friday afternoon."
@@ -619,14 +783,32 @@ CRITICAL SAFETY & GROUNDING RULES:
 3. Distinguish confirmed facts ("citedFacts") from recommendations or suggestions ("assumptionsOrSuggestions").
 4. Physical location, employer, active project, and availability are independent.
 5. Use short, direct, natural sentences. Never use double dashes (--) or em-dashes.
-6. TASK CREATION & DISAMBIGUATION RULES:
-   - When the user asks to create a task, check their available Life Areas and Projects in the context:
-   - If the user specifies or implies a matching Life Area (e.g. "under Basilissa", "for Everlyx", "in Health"), match it to that area's lifeAreaId.
-   - If the user mentions an entity, company, or topic (e.g., "for KFC", "for Acme") that does NOT clearly match any existing Life Area or Project:
-     * DO NOT create the task blindly under a random or default area!
-     * Ask the user for clarification in "replyMarkdown": e.g. "I'd love to help with KFC! Which Life Area should this belong to (e.g. Personal, Work), or would you like to create a new Life Area or Project for KFC first?"
-     * Leave "proposedMutations" empty so nothing is created blindly.
-   - If the request is clear, return a "CREATE_TASK" object in "proposedMutations" with the matched "lifeAreaId", "lifeAreaName", and clean "title" so the user can review and confirm it with one tap.
+6. SUPPORTED APP ACTIONS & MUTATION SCHEMAS:
+   Orbit is a comprehensive assistant that can control anything in the app across settings, tasks, projects, routines, and activity logging.
+   When the user commands an action, populate "proposedMutations" with the corresponding schema:
+   a. UPDATE_PREFERENCE:
+      { "mutationKind": "UPDATE_PREFERENCE", "declaredSleepTime"?: "HH:mm", "declaredWakeTime"?: "HH:mm", "quietHoursEnabled"?: boolean, "quietHoursStart"?: "HH:mm", "quietHoursEnd"?: "HH:mm", "checkInFrequency"?: "LOW"|"BALANCED"|"HIGH", "maxDailyCheckIns"?: number, "defaultPreTaskReminderMin"?: number, "explanation": "Shift sleep time to 11:30 PM" }
+      Use when the user asks to change sleep time, wake time, quiet hours, or check-in settings.
+   b. COMPLETE_TASK:
+      { "mutationKind": "COMPLETE_TASK", "taskId": string, "taskTitle": string, "explanation": "Mark '...' as complete" }
+      Use when the user says they completed or finished a task.
+   c. CREATE_TASK:
+      { "mutationKind": "CREATE_TASK", "title": string, "lifeAreaId": string, "lifeAreaName": string, "commitmentType": "SCHEDULED"|"FLEXIBLE"|"WAITING", "targetDateStr"?: "YYYY-MM-DD", "targetTimeStr"?: "HH:mm", "flexibilityWindow"?: string, "estimatedMinutes"?: number, "waitingOnPerson"?: string, "explanation": string }
+   d. RESCHEDULE_TASK:
+      { "mutationKind": "RESCHEDULE_TASK", "taskId": string, "taskTitle": string, "lifeAreaName": string, "newCommitmentType": "SCHEDULED"|"FLEXIBLE"|"WAITING", "targetDateStr"?: "YYYY-MM-DD", "targetTimeStr"?: "HH:mm", "flexibilityWindow"?: string, "explanation": string }
+   e. CREATE_PROJECT:
+      { "mutationKind": "CREATE_PROJECT", "title": string, "lifeAreaId": string, "lifeAreaName": string, "kind": "PROJECT"|"JOURNEY", "description"?: string, "initialMilestones"?: string[], "explanation": string }
+   f. CREATE_ROUTINE:
+      { "mutationKind": "CREATE_ROUTINE", "title": string, "lifeAreaId"?: string, "lifeAreaName"?: string, "daysOfWeek": number[], "startTimeLocal": "HH:mm", "endTimeLocal": "HH:mm", "physicalLocation"?: string, "explanation": string }
+      (Note: daysOfWeek uses 1 for Monday through 7 for Sunday)
+   g. LOG_ACTIVITY:
+      { "mutationKind": "LOG_ACTIVITY", "title": string, "durationMinutes": number, "lifeAreaId"?: string, "lifeAreaName"?: string, "explanation": string }
+7. AMBIGUITY & DISAMBIGUATION RULES:
+   - When the user asks to create an entity (task, project, routine) mentioning a topic, company, or entity (e.g., "create a task for KFC", "add a routine for badminton") that does NOT clearly match an existing Life Area or Project:
+     * DO NOT create the entity blindly under an unrelated area!
+     * Ask the user for clarification in "replyMarkdown": e.g. "I'd love to help with KFC! Which Life Area should this belong to (e.g. Work, Personal), or would you like to set up KFC as a new Life Area or Project first?"
+     * Leave "proposedMutations" empty so nothing is created prematurely.
+   - When the request is clear, include the mutation in "proposedMutations" with a helpful explanation.
 
 User Context (JSON):
 ${JSON.stringify(userContext, null, 2)}
@@ -642,7 +824,7 @@ Return ONLY valid JSON matching:
   "citedFacts": ["confirmed fact from context"],
   "assumptionsOrSuggestions": ["thoughtful piece of advice or pacing recommendation"],
   "proposedMutations": [
-    // Either RESCHEDULE_TASK or CREATE_TASK objects if the user asked to schedule, move, or create a task
+    // Array of zero or more proposed mutation objects from the supported schemas above
   ]
 }`;
 

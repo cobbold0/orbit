@@ -431,7 +431,19 @@ export function QuickVoiceDialog({ isOpen, onClose }: QuickVoiceDialogProps) {
                                   <p className="font-semibold text-base-content truncate">
                                     {mut.mutationKind === "RESCHEDULE_TASK"
                                       ? `Move "${mut.taskTitle}"`
-                                      : `Add "${mut.title}"`}
+                                      : mut.mutationKind === "CREATE_TASK"
+                                      ? `Add "${mut.title}"`
+                                      : mut.mutationKind === "UPDATE_PREFERENCE"
+                                      ? "Update Preferences"
+                                      : mut.mutationKind === "COMPLETE_TASK"
+                                      ? `Complete "${mut.taskTitle}"`
+                                      : mut.mutationKind === "CREATE_PROJECT"
+                                      ? `Create Project "${mut.title}"`
+                                      : mut.mutationKind === "CREATE_ROUTINE"
+                                      ? `Create Routine "${mut.title}"`
+                                      : mut.mutationKind === "LOG_ACTIVITY"
+                                      ? `Log Activity "${mut.title}"`
+                                      : "Proposed Change"}
                                   </p>
                                   <p className="text-base-content/60 text-[0.7rem]">
                                     {toPlainText(mut.explanation)}

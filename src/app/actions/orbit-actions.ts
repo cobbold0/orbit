@@ -769,6 +769,91 @@ export async function applyProposedMutationAction(
     };
   }
 
+  if (mutation.mutationKind === "UPDATE_PREFERENCE") {
+    const updateData: {
+      declaredSleepTime?: string;
+      declaredWakeTime?: string;
+      quietHoursEnabled?: boolean;
+      quietHoursStart?: string;
+      quietHoursEnd?: string;
+      checkInFrequency?: CheckInFrequency;
+      maxDailyCheckIns?: number;
+      defaultPreTaskReminderMin?: number;
+    } = {};
+
+    if (mutation.declaredSleepTime) updateData.declaredSleepTime = mutation.declaredSleepTime;
+    if (mutation.declaredWakeTime) updateData.declaredWakeTime = mutation.declaredWakeTime;
+    if (mutation.quietHoursEnabled !== undefined && mutation.quietHoursEnabled !== null) {
+      updateData.quietHoursEnabled = mutation.quietHoursEnabled;
+    }
+    if (mutation.quietHoursStart) updateData.quietHoursStart = mutation.quietHoursStart;
+    if (mutation.quietHoursEnd) updateData.quietHoursEnd = mutation.quietHoursEnd;
+    if (mutation.checkInFrequency) updateData.checkInFrequency = mutation.checkInFrequency as CheckInFrequency;
+    if (mutation.maxDailyCheckIns) updateData.maxDailyCheckIns = mutation.maxDailyCheckIns;
+    if (mutation.defaultPreTaskReminderMin) updateData.defaultPreTaskReminderMin = mutation.defaultPreTaskReminderMin;
+
+    await updateUserPreferences(userId, updateData);
+    revalidateAllOrbitViews();
+    return {
+      ok: true,
+      confirmationMessage: `Confirmed: Updated preferences (${mutation.explanation}).`,
+    };
+  }
+
+  if (mutation.mutationKind === "COMPLETE_TASK") {
+    await confirmTaskCompletion(userId, mutation.taskId);
+    revalidateAllOrbitViews();
+    return {
+      ok: true,
+      confirmationMessage: `Confirmed: Completed "${mutation.taskTitle}".`,
+    };
+  }
+
+  if (mutation.mutationKind === "CREATE_PROJECT") {
+    await createProjectOrJourney(userId, {
+      lifeAreaId: mutation.lifeAreaId,
+      title: mutation.title,
+      description: mutation.description ?? "",
+      kind: mutation.kind === "JOURNEY" ? ProjectKind.JOURNEY : ProjectKind.PROJECT,
+      initialMilestones: mutation.initialMilestones ?? [],
+    });
+    revalidateAllOrbitViews();
+    return {
+      ok: true,
+      confirmationMessage: `Confirmed: Created project "${mutation.title}" under ${mutation.lifeAreaName}.`,
+    };
+  }
+
+  if (mutation.mutationKind === "CREATE_ROUTINE") {
+    await createDeclaredRoutine(userId, {
+      title: mutation.title,
+      lifeAreaId: mutation.lifeAreaId ?? null,
+      kind: RoutineKind.HABIT,
+      startTimeLocal: mutation.startTimeLocal,
+      endTimeLocal: mutation.endTimeLocal,
+      physicalLocation: mutation.physicalLocation ?? undefined,
+      daysOfWeek: mutation.daysOfWeek,
+    });
+    revalidateAllOrbitViews();
+    return {
+      ok: true,
+      confirmationMessage: `Confirmed: Created routine "${mutation.title}".`,
+    };
+  }
+
+  if (mutation.mutationKind === "LOG_ACTIVITY") {
+    await logExplicitActivityCheckIn(userId, {
+      title: mutation.title,
+      lifeAreaId: mutation.lifeAreaId ?? null,
+      durationMinutes: mutation.durationMinutes,
+    });
+    revalidateAllOrbitViews();
+    return {
+      ok: true,
+      confirmationMessage: `Confirmed: Logged ${mutation.durationMinutes} min for "${mutation.title}".`,
+    };
+  }
+
   // CREATE_TASK mutation
   let scheduledStart: Date | null = null;
   let scheduledEnd: Date | null = null;

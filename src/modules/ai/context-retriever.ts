@@ -8,6 +8,16 @@ export interface UserOrbitContext {
   localDate: string;
   localTimeHHmm: string;
   isoDayOfWeek: number;
+  userPreferences: {
+    declaredWakeTime: string;
+    declaredSleepTime: string;
+    quietHoursEnabled: boolean;
+    quietHoursStart: string;
+    quietHoursEnd: string;
+    checkInFrequency: string;
+    maxDailyCheckIns: number;
+    defaultPreTaskReminderMin: number;
+  };
   lifeAreas: {
     id: string;
     name: string;
@@ -112,6 +122,16 @@ export async function retrieveUserOrbitContext(
     localDate: wallClock.localDate,
     localTimeHHmm: wallClock.localTimeHHmm,
     isoDayOfWeek: wallClock.isoDayOfWeek,
+    userPreferences: {
+      declaredWakeTime: pref?.declaredWakeTime ?? "07:30",
+      declaredSleepTime: pref?.declaredSleepTime ?? "23:00",
+      quietHoursEnabled: pref?.quietHoursEnabled ?? true,
+      quietHoursStart: pref?.quietHoursStart ?? "22:00",
+      quietHoursEnd: pref?.quietHoursEnd ?? "07:00",
+      checkInFrequency: pref?.checkInFrequency ?? "BALANCED",
+      maxDailyCheckIns: pref?.maxDailyCheckIns ?? 3,
+      defaultPreTaskReminderMin: pref?.defaultPreTaskReminderMin ?? 30,
+    },
     lifeAreas: lifeAreas.map((a) => ({
       id: a.id,
       name: a.name,

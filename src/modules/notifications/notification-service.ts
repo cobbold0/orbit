@@ -75,7 +75,7 @@ export async function getOrCreateUserPreferences(userId: string) {
 
 export async function updateUserPreferences(
   userId: string,
-  input: {
+  input: Partial<{
     ianaTimeZone: string;
     morningBriefingEnabled: boolean;
     morningBriefingTime: string;
@@ -89,60 +89,86 @@ export async function updateUserPreferences(
     randomCheckInsEnabled: boolean;
     checkInFrequency: CheckInFrequency;
     minMinutesBetweenCheckIns: number;
-  }
+  }>
 ) {
-  // Validate IANA timezone cleanly via Temporal before persisting
-  let safeZone = input.ianaTimeZone.trim() || "Africa/Lagos";
-  try {
-    Temporal.Now.zonedDateTimeISO(safeZone);
-  } catch {
-    safeZone = "UTC";
+  let safeZone: string | undefined = undefined;
+  if (input.ianaTimeZone !== undefined) {
+    safeZone = input.ianaTimeZone.trim() || "Africa/Lagos";
+    try {
+      Temporal.Now.zonedDateTimeISO(safeZone);
+    } catch {
+      safeZone = "UTC";
+    }
   }
 
   return prisma.userPreference.upsert({
     where: { userId },
     update: {
-      ianaTimeZone: safeZone,
-      morningBriefingEnabled: input.morningBriefingEnabled,
-      morningBriefingTime: input.morningBriefingTime,
-      declaredWakeTime: input.declaredWakeTime,
-      declaredSleepTime: input.declaredSleepTime,
-      quietHoursEnabled: input.quietHoursEnabled,
-      quietHoursStart: input.quietHoursStart,
-      quietHoursEnd: input.quietHoursEnd,
-      maxDailyCheckIns: Math.max(1, Math.min(20, input.maxDailyCheckIns)),
-      defaultPreTaskReminderMin: Math.max(
-        5,
-        Math.min(180, input.defaultPreTaskReminderMin)
-      ),
-      randomCheckInsEnabled: input.randomCheckInsEnabled,
-      checkInFrequency: input.checkInFrequency,
-      minMinutesBetweenCheckIns: Math.max(
-        30,
-        Math.min(720, input.minMinutesBetweenCheckIns)
-      ),
+      ...(safeZone !== undefined ? { ianaTimeZone: safeZone } : {}),
+      ...(input.morningBriefingEnabled !== undefined
+        ? { morningBriefingEnabled: input.morningBriefingEnabled }
+        : {}),
+      ...(input.morningBriefingTime !== undefined
+        ? { morningBriefingTime: input.morningBriefingTime }
+        : {}),
+      ...(input.declaredWakeTime !== undefined
+        ? { declaredWakeTime: input.declaredWakeTime }
+        : {}),
+      ...(input.declaredSleepTime !== undefined
+        ? { declaredSleepTime: input.declaredSleepTime }
+        : {}),
+      ...(input.quietHoursEnabled !== undefined
+        ? { quietHoursEnabled: input.quietHoursEnabled }
+        : {}),
+      ...(input.quietHoursStart !== undefined
+        ? { quietHoursStart: input.quietHoursStart }
+        : {}),
+      ...(input.quietHoursEnd !== undefined
+        ? { quietHoursEnd: input.quietHoursEnd }
+        : {}),
+      ...(input.maxDailyCheckIns !== undefined
+        ? {
+            maxDailyCheckIns: Math.max(1, Math.min(20, input.maxDailyCheckIns)),
+          }
+        : {}),
+      ...(input.defaultPreTaskReminderMin !== undefined
+        ? {
+            defaultPreTaskReminderMin: Math.max(
+              5,
+              Math.min(180, input.defaultPreTaskReminderMin)
+            ),
+          }
+        : {}),
+      ...(input.randomCheckInsEnabled !== undefined
+        ? { randomCheckInsEnabled: input.randomCheckInsEnabled }
+        : {}),
+      ...(input.checkInFrequency !== undefined
+        ? { checkInFrequency: input.checkInFrequency }
+        : {}),
+      ...(input.minMinutesBetweenCheckIns !== undefined
+        ? {
+            minMinutesBetweenCheckIns: Math.max(
+              30,
+              Math.min(720, input.minMinutesBetweenCheckIns)
+            ),
+          }
+        : {}),
     },
     create: {
       userId,
-      ianaTimeZone: safeZone,
-      morningBriefingEnabled: input.morningBriefingEnabled,
-      morningBriefingTime: input.morningBriefingTime,
-      declaredWakeTime: input.declaredWakeTime,
-      declaredSleepTime: input.declaredSleepTime,
-      quietHoursEnabled: input.quietHoursEnabled,
-      quietHoursStart: input.quietHoursStart,
-      quietHoursEnd: input.quietHoursEnd,
-      maxDailyCheckIns: Math.max(1, Math.min(20, input.maxDailyCheckIns)),
-      defaultPreTaskReminderMin: Math.max(
-        5,
-        Math.min(180, input.defaultPreTaskReminderMin)
-      ),
-      randomCheckInsEnabled: input.randomCheckInsEnabled,
-      checkInFrequency: input.checkInFrequency,
-      minMinutesBetweenCheckIns: Math.max(
-        30,
-        Math.min(720, input.minMinutesBetweenCheckIns)
-      ),
+      ianaTimeZone: safeZone ?? "Africa/Lagos",
+      morningBriefingEnabled: input.morningBriefingEnabled ?? true,
+      morningBriefingTime: input.morningBriefingTime ?? "07:30",
+      declaredWakeTime: input.declaredWakeTime ?? "07:00",
+      declaredSleepTime: input.declaredSleepTime ?? "23:00",
+      quietHoursEnabled: input.quietHoursEnabled ?? true,
+      quietHoursStart: input.quietHoursStart ?? "22:00",
+      quietHoursEnd: input.quietHoursEnd ?? "07:00",
+      maxDailyCheckIns: input.maxDailyCheckIns ?? 6,
+      defaultPreTaskReminderMin: input.defaultPreTaskReminderMin ?? 30,
+      randomCheckInsEnabled: input.randomCheckInsEnabled ?? true,
+      checkInFrequency: input.checkInFrequency ?? CheckInFrequency.BALANCED,
+      minMinutesBetweenCheckIns: input.minMinutesBetweenCheckIns ?? 120,
     },
   });
 }
