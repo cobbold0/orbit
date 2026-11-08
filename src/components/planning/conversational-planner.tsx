@@ -1,7 +1,7 @@
 "use client";
 
-import React, { useId, useState } from "react";
-import { Check, MessageSquare, SendHorizontal } from "lucide-react";
+import React, { useId, useRef, useState } from "react";
+import { Check, MessageSquare, Mic, SendHorizontal, Sparkles } from "lucide-react";
 import {
   applyProposedMutationAction,
   askOrbitPlannerAction,
@@ -30,7 +30,58 @@ export function ConversationalPlanner({
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<ConversationalPlanResponse | null>(null);
   const [applied, setApplied] = useState<Record<number, string>>({});
+  const [isListening, setIsListening] = useState(false);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const speechRef = useRef<any>(null);
   const { notify } = useOrbitToast();
+
+  function toggleSpeech() {
+    if (isListening) {
+      speechRef.current?.stop();
+      setIsListening(false);
+      return;
+    }
+
+    const SpeechRecognition =
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (window as any).SpeechRecognition ||
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (window as any).webkitSpeechRecognition;
+
+    if (!SpeechRecognition) {
+      notify("Speech recognition is not supported in this browser.", "info");
+      return;
+    }
+
+    const recognition = new SpeechRecognition();
+    speechRef.current = recognition;
+    recognition.continuous = false;
+    recognition.interimResults = true;
+    recognition.lang = "en-US";
+
+    recognition.onstart = () => {
+      setIsListening(true);
+    };
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    recognition.onresult = (event: any) => {
+      let full = "";
+      for (let i = 0; i < event.results.length; i++) {
+        full += event.results[i][0].transcript;
+      }
+      setPrompt(full);
+    };
+
+    recognition.onerror = () => {
+      setIsListening(false);
+    };
+
+    recognition.onend = () => {
+      setIsListening(false);
+    };
+
+    recognition.start();
+  }
 
   async function submit() {
     const text = prompt.trim();
@@ -89,8 +140,20 @@ export function ConversationalPlanner({
               }
             }}
             placeholder={placeholder}
-            className="input input-bordered w-full pl-9 text-sm bg-base-100"
+            className="input input-bordered w-full pl-9 pr-10 text-sm bg-base-100"
           />
+          <button
+            type="button"
+            onClick={toggleSpeech}
+            aria-label={isListening ? "Stop listening" : "Dictate with voice"}
+            className={`absolute right-2.5 top-1/2 -translate-y-1/2 btn btn-ghost btn-xs btn-circle ${
+              isListening
+                ? "text-error bg-error/10 animate-pulse"
+                : "text-base-content/50 hover:text-base-content"
+            }`}
+          >
+            <Mic className="h-4 w-4" />
+          </button>
         </div>
         <button
           type="submit"
@@ -106,7 +169,7 @@ export function ConversationalPlanner({
             <SendHorizontal className="h-4 w-4" aria-hidden="true" />
           )}
           <span className="hidden sm:inline">
-            {isLoading ? "Working..." : "Ask"}
+            {isLoading ? "Thinking..." : "Ask"}
           </span>
         </button>
       </form>
@@ -122,32 +185,37 @@ export function ConversationalPlanner({
         )}
 
         {result && (
-          <div className="mt-4 p-4 rounded-xl bg-base-200/50 border border-base-300/60">
-            <p className="whitespace-pre-line text-sm leading-relaxed">
+          <div className="mt-4 p-4 rounded-2xl bg-base-200/50 border border-base-300/60 space-y-3">
+            <div className="flex items-center gap-1.5 text-xs font-semibold text-primary">
+              <Sparkles className="h-3.5 w-3.5" />
+              <span>Orbit Advisor</span>
+            </div>
+
+            <p className="whitespace-pre-line text-sm leading-relaxed text-base-content font-medium">
               {toPlainText(result.replyMarkdown)}
             </p>
 
-            {result.citedFacts.length > 0 && (
-              <div className="mt-3">
+            {result.assumptionsOrSuggestions.length > 0 && (
+              <div className="pt-2 border-t border-base-300/50">
                 <h4 className="text-xs font-semibold text-base-content/70 uppercase tracking-wider">
-                  From your data
+                  Suggestions & Advice
                 </h4>
-                <ul className="meta mt-1 list-disc space-y-1 ps-5 text-xs">
-                  {result.citedFacts.map((f, i) => (
-                    <li key={i}>{toPlainText(f)}</li>
+                <ul className="meta mt-1 list-disc space-y-1 ps-5 text-xs text-base-content/80">
+                  {result.assumptionsOrSuggestions.map((a, i) => (
+                    <li key={i}>{toPlainText(a)}</li>
                   ))}
                 </ul>
               </div>
             )}
 
-            {result.assumptionsOrSuggestions.length > 0 && (
-              <div className="mt-3">
-                <h4 className="text-xs font-semibold text-base-content/70 uppercase tracking-wider">
-                  Assumed
+            {result.citedFacts.length > 0 && (
+              <div className="pt-2 border-t border-base-300/50">
+                <h4 className="text-[0.7rem] font-semibold text-base-content/50 uppercase tracking-wider">
+                  Confirmed from your data
                 </h4>
-                <ul className="meta mt-1 list-disc space-y-1 ps-5 text-xs">
-                  {result.assumptionsOrSuggestions.map((a, i) => (
-                    <li key={i}>{toPlainText(a)}</li>
+                <ul className="meta mt-1 list-disc space-y-0.5 ps-5 text-[0.75rem] text-base-content/60">
+                  {result.citedFacts.map((f, i) => (
+                    <li key={i}>{toPlainText(f)}</li>
                   ))}
                 </ul>
               </div>

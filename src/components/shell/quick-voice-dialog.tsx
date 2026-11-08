@@ -11,15 +11,19 @@ import {
   ListTodo,
   Loader2,
   Mic,
+  RotateCcw,
   Sparkles,
   Square,
   X,
 } from "lucide-react";
 import {
+  applyProposedMutationAction,
   processQuickVoiceCommandAction,
   QuickVoiceCommandResult,
   transcribeAudioBase64Action,
 } from "@/app/actions/orbit-actions";
+import type { ProposedMutation } from "@/lib/ai/schemas";
+import { toPlainText } from "@/lib/time/format";
 import { useOrbitToast } from "@/components/ui/orbit-toast";
 
 interface QuickVoiceDialogProps {
@@ -36,6 +40,8 @@ export function QuickVoiceDialog({ isOpen, onClose }: QuickVoiceDialogProps) {
   const [durationSec, setDurationSec] = useState(0);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [result, setResult] = useState<QuickVoiceCommandResult | null>(null);
+  const [applyingIdx, setApplyingIdx] = useState<number | null>(null);
+  const [applied, setApplied] = useState<Record<number, string>>({});
 
   const recorderRef = useRef<MediaRecorder | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -223,24 +229,44 @@ export function QuickVoiceDialog({ isOpen, onClose }: QuickVoiceDialogProps) {
     }
   }
 
+  async function confirmMutation(mutation: ProposedMutation, index: number) {
+    setApplyingIdx(index);
+    try {
+      const res = await applyProposedMutationAction(mutation);
+      setApplied((prev) => ({ ...prev, [index]: res.confirmationMessage }));
+      notify("Change applied", "success");
+    } catch {
+      notify("Could not apply that change. Try again.", "error");
+    } finally {
+      setApplyingIdx(null);
+    }
+  }
+
   async function processTranscript(text: string) {
     try {
       const res = await processQuickVoiceCommandAction(text);
       setResult(res);
       setState("success");
-      notify(
-        res.intent === "TASK"
-          ? `Task created: ${res.title}`
-          : res.intent === "ACTIVITY"
-          ? `Work logged: ${res.title}`
-          : `Note saved to Inbox`,
-        "success"
-      );
+      setApplied({});
 
-      // Auto close after 1.8 seconds on success
-      setTimeout(() => {
-        onClose();
-      }, 1800);
+      if (res.intent === "QUERY") {
+        // Keep open so user can read advice and answers
+        notify("Orbit prepared your answer", "success");
+      } else {
+        notify(
+          res.intent === "TASK"
+            ? `Task created: ${res.title}`
+            : res.intent === "ACTIVITY"
+            ? `Work logged: ${res.title}`
+            : `Note saved to Inbox`,
+          "success"
+        );
+
+        // Auto close after 1.8 seconds on simple capture
+        setTimeout(() => {
+          onClose();
+        }, 1800);
+      }
     } catch (err) {
       setState("error");
       setErrorMessage(
@@ -357,36 +383,117 @@ export function QuickVoiceDialog({ isOpen, onClose }: QuickVoiceDialogProps) {
 
             {state === "success" && result && (
               <motion.div
-                initial={{ scale: 0.8, opacity: 0 }}
+                initial={{ scale: 0.95, opacity: 0 }}
                 animate={{ scale: 1, opacity: 1 }}
-                className="flex flex-col items-center gap-2"
+                className="w-full flex flex-col items-center gap-2"
               >
-                <div className="flex h-14 w-14 items-center justify-center rounded-full bg-success/15 text-success">
-                  <CheckCircle2 className="h-8 w-8" />
-                </div>
-                <div className="mt-1 flex items-center gap-1.5 rounded-full bg-base-200 px-3 py-1 text-xs font-semibold text-base-content">
-                  {result.intent === "TASK" && (
-                    <>
-                      <ListTodo className="h-3.5 w-3.5 text-primary" />
-                      <span>Task Created</span>
-                    </>
-                  )}
-                  {result.intent === "ACTIVITY" && (
-                    <>
-                      <Clock className="h-3.5 w-3.5 text-secondary" />
-                      <span>Activity Logged</span>
-                    </>
-                  )}
-                  {result.intent === "NOTE" && (
-                    <>
-                      <FileText className="h-3.5 w-3.5 text-accent" />
-                      <span>Note Saved</span>
-                    </>
-                  )}
-                </div>
-                <p className="mt-1 font-medium text-sm text-base-content max-w-xs truncate">
-                  &ldquo;{result.title}&rdquo;
-                </p>
+                {result.intent === "QUERY" ? (
+                  <div className="w-full space-y-3 text-left">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-1.5 rounded-full bg-primary/10 px-3 py-1 text-xs font-semibold text-primary">
+                        <Sparkles className="h-3.5 w-3.5" />
+                        <span>Orbit Advisor</span>
+                      </div>
+                      <span className="text-[0.7rem] text-base-content/50">
+                        Humanized guidance
+                      </span>
+                    </div>
+
+                    <div className="max-h-64 overflow-y-auto rounded-2xl bg-base-200/50 p-4 border border-base-300/60 space-y-3">
+                      <p className="whitespace-pre-line text-sm leading-relaxed text-base-content font-medium">
+                        {toPlainText(result.summary)}
+                      </p>
+
+                      {result.planResponse?.assumptionsOrSuggestions &&
+                        result.planResponse.assumptionsOrSuggestions.length > 0 && (
+                          <div className="pt-2 border-t border-base-300/50">
+                            <ul className="space-y-1 text-xs text-base-content/70">
+                              {result.planResponse.assumptionsOrSuggestions.map(
+                                (a, i) => (
+                                  <li key={i} className="flex items-start gap-1.5">
+                                    <span className="text-primary mt-0.5">•</span>
+                                    <span>{toPlainText(a)}</span>
+                                  </li>
+                                )
+                              )}
+                            </ul>
+                          </div>
+                        )}
+
+                      {result.planResponse?.proposedMutations &&
+                        result.planResponse.proposedMutations.length > 0 && (
+                          <div className="pt-2 border-t border-base-300/50 space-y-2">
+                            {result.planResponse.proposedMutations.map((mut, i) => (
+                              <div
+                                key={i}
+                                className="flex items-center justify-between gap-2 rounded-xl bg-base-100 p-2.5 border border-base-300/60 text-xs"
+                              >
+                                <div className="min-w-0 flex-1">
+                                  <p className="font-semibold text-base-content truncate">
+                                    {mut.mutationKind === "RESCHEDULE_TASK"
+                                      ? `Move "${mut.taskTitle}"`
+                                      : `Add "${mut.title}"`}
+                                  </p>
+                                  <p className="text-base-content/60 text-[0.7rem]">
+                                    {toPlainText(mut.explanation)}
+                                  </p>
+                                </div>
+                                {applied[i] ? (
+                                  <span className="inline-flex items-center gap-1 font-semibold text-success shrink-0">
+                                    <Check className="h-3.5 w-3.5" />
+                                    <span>Applied</span>
+                                  </span>
+                                ) : (
+                                  <button
+                                    type="button"
+                                    disabled={applyingIdx === i}
+                                    onClick={() => void confirmMutation(mut, i)}
+                                    className="btn btn-primary btn-xs shrink-0"
+                                  >
+                                    {applyingIdx === i ? (
+                                      <span className="loading loading-spinner loading-xs" />
+                                    ) : (
+                                      <Check className="h-3 w-3" />
+                                    )}
+                                    <span>Confirm</span>
+                                  </button>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                    <div className="flex h-14 w-14 items-center justify-center rounded-full bg-success/15 text-success">
+                      <CheckCircle2 className="h-8 w-8" />
+                    </div>
+                    <div className="mt-1 flex items-center gap-1.5 rounded-full bg-base-200 px-3 py-1 text-xs font-semibold text-base-content">
+                      {result.intent === "TASK" && (
+                        <>
+                          <ListTodo className="h-3.5 w-3.5 text-primary" />
+                          <span>Task Created</span>
+                        </>
+                      )}
+                      {result.intent === "ACTIVITY" && (
+                        <>
+                          <Clock className="h-3.5 w-3.5 text-secondary" />
+                          <span>Activity Logged</span>
+                        </>
+                      )}
+                      {result.intent === "NOTE" && (
+                        <>
+                          <FileText className="h-3.5 w-3.5 text-accent" />
+                          <span>Note Saved</span>
+                        </>
+                      )}
+                    </div>
+                    <p className="mt-1 font-medium text-sm text-base-content max-w-xs truncate">
+                      &ldquo;{result.title}&rdquo;
+                    </p>
+                  </>
+                )}
               </motion.div>
             )}
 
@@ -420,21 +527,24 @@ export function QuickVoiceDialog({ isOpen, onClose }: QuickVoiceDialogProps) {
             )}
           </div>
 
-          {/* Live Transcript / Examples Box */}
-          <div className="min-h-16 rounded-2xl bg-base-200/70 p-3.5 border border-base-300/50 text-left">
-            {transcript ? (
-              <p className="text-xs leading-relaxed text-base-content font-medium">
-                &ldquo;{transcript}&rdquo;
-              </p>
-            ) : (
-              <div className="space-y-1 text-[0.75rem] text-base-content/50">
-                <p className="font-semibold text-base-content/60">Examples to say:</p>
-                <p>• &ldquo;Create a task to review contracts by Friday&rdquo;</p>
-                <p>• &ldquo;Log 45 minutes on Orbit architecture&rdquo;</p>
-                <p>• &ldquo;Take a note that Sarah agreed to send designs&rdquo;</p>
-              </div>
-            )}
-          </div>
+          {/* Live Transcript / Examples Box (shown while listening, processing, or non-query) */}
+          {result?.intent !== "QUERY" && (
+            <div className="min-h-16 rounded-2xl bg-base-200/70 p-3.5 border border-base-300/50 text-left">
+              {transcript ? (
+                <p className="text-xs leading-relaxed text-base-content font-medium">
+                  &ldquo;{transcript}&rdquo;
+                </p>
+              ) : (
+                <div className="space-y-1 text-[0.75rem] text-base-content/60">
+                  <p className="font-semibold text-base-content/80">Examples to ask or say:</p>
+                  <p>• &ldquo;Do I have anything today?&rdquo;</p>
+                  <p>• &ldquo;What should I focus on next?&rdquo;</p>
+                  <p>• &ldquo;Create a task to review contracts by Friday&rdquo;</p>
+                  <p>• &ldquo;Log 45 minutes on Orbit architecture&rdquo;</p>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Action Footer */}
           <div className="mt-5 flex items-center justify-between gap-2 pt-1">
@@ -474,16 +584,36 @@ export function QuickVoiceDialog({ isOpen, onClose }: QuickVoiceDialogProps) {
                 </button>
               </div>
             ) : state === "success" ? (
-              <div className="flex w-full justify-end">
-                <button
-                  type="button"
-                  onClick={onClose}
-                  className="btn btn-sm btn-ghost gap-1 text-xs text-success"
-                >
-                  <Check className="h-3.5 w-3.5" />
-                  <span>Done</span>
-                </button>
-              </div>
+              result?.intent === "QUERY" ? (
+                <div className="flex w-full items-center justify-between gap-2">
+                  <button
+                    type="button"
+                    onClick={() => void startListening()}
+                    className="btn btn-ghost btn-sm gap-1.5 text-xs text-base-content/70 hover:text-base-content"
+                  >
+                    <RotateCcw className="h-3.5 w-3.5" />
+                    <span>Ask another question</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={onClose}
+                    className="btn btn-primary btn-sm px-4 text-xs"
+                  >
+                    Done
+                  </button>
+                </div>
+              ) : (
+                <div className="flex w-full justify-end">
+                  <button
+                    type="button"
+                    onClick={onClose}
+                    className="btn btn-sm btn-ghost gap-1 text-xs text-success"
+                  >
+                    <Check className="h-3.5 w-3.5" />
+                    <span>Done</span>
+                  </button>
+                </div>
+              )
             ) : (
               <div className="h-8" />
             )}

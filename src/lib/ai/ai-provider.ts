@@ -383,34 +383,65 @@ export class DeterministicFallbackProvider implements AIProvider {
       };
     }
 
-    // Case 3: Contextual Query / What should I focus on?
-    const scheduledCount = userContext.openTasks.filter(
+    // Case 3: Contextual Query, Today's agenda, or Priority Advice
+    const scheduledTasks = userContext.openTasks.filter(
       (t) => t.commitmentType === "SCHEDULED"
-    ).length;
-    const flexibleCount = userContext.openTasks.filter(
+    );
+    const flexibleTasks = userContext.openTasks.filter(
       (t) => t.commitmentType === "FLEXIBLE"
-    ).length;
-    const waitingCount = userContext.openTasks.filter(
+    );
+    const waitingTasks = userContext.openTasks.filter(
       (t) => t.commitmentType === "WAITING"
-    ).length;
+    );
 
-    const topTasksList = userContext.openTasks
-      .slice(0, 4)
-      .map(
-        (t) =>
-          `- ${t.title} (${t.lifeAreaName}, ${t.commitmentType.toLowerCase()})`
-      )
-      .join("\n");
+    const isTodayQuery = /\b(?:today|now|tonight|this\s+afternoon|this\s+morning|day|schedule|agenda)\b/i.test(lower);
+
+    let replyMarkdown = "";
+    let advice = "";
+
+    if (isTodayQuery) {
+      if (scheduledTasks.length === 0 && flexibleTasks.length === 0) {
+        replyMarkdown = `Your day is completely open! You don't have any scheduled appointments or deadlines on your calendar today.\n\nEnjoy the breathing room to recharge, or feel free to jot down any new thoughts whenever inspiration strikes.`;
+        advice = "No urgent demands today. Take time to rest or explore personal interests.";
+      } else if (scheduledTasks.length > 0) {
+        const scheduledList = scheduledTasks
+          .slice(0, 4)
+          .map((t) => `• ${t.title} (${t.lifeAreaName})`)
+          .join("\n");
+        const flexNote = flexibleTasks.length > 0
+          ? `\n\nYou also have ${flexibleTasks.length} flexible task${flexibleTasks.length > 1 ? "s" : ""} on deck if you find extra time.`
+          : "";
+        replyMarkdown = `Here is how your day is shaping up:\n\n${scheduledList}${flexNote}\n\nMy advice: start with "${scheduledTasks[0]?.title}" to build quick momentum early, and remember to leave a buffer between blocks so you don't feel rushed.`;
+        advice = `Focus on "${scheduledTasks[0]?.title}" first to lock in an early win.`;
+      } else {
+        const flexList = flexibleTasks
+          .slice(0, 3)
+          .map((t) => `• ${t.title} (${t.lifeAreaName})`)
+          .join("\n");
+        replyMarkdown = `You have no hard-scheduled appointments today, which gives you great freedom.\n\nYou do have ${flexibleTasks.length} flexible item${flexibleTasks.length > 1 ? "s" : ""} you could look at:\n\n${flexList}\n\nMy advice: pick "${flexibleTasks[0]?.title}" for a focused 30 to 45 minute sprint while your energy is fresh, and keep the rest of your day relaxed.`;
+        advice = `Tackle "${flexibleTasks[0]?.title}" when ready, with no rigid schedule constraints.`;
+      }
+    } else {
+      if (userContext.openTasks.length === 0) {
+        replyMarkdown = `Everything is currently clear across your areas! No open tasks or pending follow-ups are waiting.\n\nWhenever something comes to mind, you can ask me to capture a task, note, or log your work.`;
+        advice = "All caught up. Good time for reflection or planning ahead.";
+      } else {
+        const topTasks = userContext.openTasks.slice(0, 4);
+        const taskList = topTasks
+          .map((t) => `• ${t.title} (${t.lifeAreaName})`)
+          .join("\n");
+        replyMarkdown = `Here are your main priorities across areas:\n\n${taskList}\n\nMy recommendation: prioritize "${topTasks[0]?.title}" first. Getting that across the finish line will free up mental clarity for everything else.`;
+        advice = `Start with "${topTasks[0]?.title}" to create positive momentum.`;
+      }
+    }
 
     return {
-      replyMarkdown: `Open tasks across your areas:\n\n${topTasksList}\n\nAsk me to move a task or add a reminder when needed.`,
+      replyMarkdown,
       citedFacts: [
-        `${scheduledCount} scheduled, ${flexibleCount} flexible, and ${waitingCount} waiting tasks active.`,
-        `${userContext.recentConfirmedActivities.length} confirmed activities in your recent history.`,
+        `${scheduledTasks.length} scheduled, ${flexibleTasks.length} flexible, and ${waitingTasks.length} waiting tasks active.`,
+        `Local date in ${userContext.ianaTimeZone}: ${userContext.localDate}.`,
       ],
-      assumptionsOrSuggestions: [
-        "Handle elapsed check-in items first, or place one flexible task into an open slot.",
-      ],
+      assumptionsOrSuggestions: [advice],
       proposedMutations: [],
       providerUsed: "DETERMINISTIC_FALLBACK",
     };
@@ -544,27 +575,36 @@ ${rawContent}
     }
 
     const modelName = resolveSupportedGeminiModel(process.env.GEMINI_MODEL);
-    const prompt = `You are Orbit, a quiet, intelligent personal life operating system.
-CRITICAL SAFETY RULES:
+    const prompt = `You are Orbit, an empathetic, perceptive, and supportive personal life operating system and trusted advisor.
+
+YOUR TONE & HUMANIZATION:
+- Speak warmly and conversationally, like a trusted, caring chief of staff.
+- When the user asks "Do I have anything today?", "What should I focus on?", or questions about their day:
+  - Do NOT provide a cold, robotic dump of statistics or raw counts.
+  - Humanize the response: explain what is coming up in plain, natural language, celebrate if their day has breathing room, and offer thoughtful, practical advice on what to tackle first and how to pace themselves.
+  - If they have many commitments, advise them gently on pacing and protecting buffers so they do not feel overwhelmed.
+- Keep responses natural, supportive, and grounded in their real commitments.
+
+CRITICAL SAFETY & GROUNDING RULES:
 1. Never claim an action was already completed or mutated in the database. Instead, propose mutations in "proposedMutations" so the user can confirm them.
 2. Never invent user history. Only cite facts from the provided context.
-3. Distinguish confirmed facts ("citedFacts") from assumptions or suggestions ("assumptionsOrSuggestions").
+3. Distinguish confirmed facts ("citedFacts") from recommendations or suggestions ("assumptionsOrSuggestions").
 4. Physical location, employer, active project, and availability are independent.
 5. Use short, direct, natural sentences. Never use double dashes (--) or em-dashes.
 
 User Context (JSON):
 ${JSON.stringify(userContext, null, 2)}
 
-User Message:
+User Question or Request:
 """
 ${userMessage}
 """
 
 Return ONLY valid JSON matching:
 {
-  "replyMarkdown": "Concise, calm markdown response",
-  "citedFacts": ["confirmed fact 1"],
-  "assumptionsOrSuggestions": ["suggestion or interpretation 1"],
+  "replyMarkdown": "Warm, human, empathetic markdown answer with supportive advice and clear priorities",
+  "citedFacts": ["confirmed fact from context"],
+  "assumptionsOrSuggestions": ["thoughtful piece of advice or pacing recommendation"],
   "proposedMutations": [
     // Either RESCHEDULE_TASK or CREATE_TASK objects if the user asked to schedule, move, or create a task
   ]

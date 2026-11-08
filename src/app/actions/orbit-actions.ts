@@ -942,10 +942,11 @@ export async function initializeNewUserWorkspaceAction(input?: {
 
 export interface QuickVoiceCommandResult {
   ok: boolean;
-  intent: "TASK" | "ACTIVITY" | "NOTE";
+  intent: "TASK" | "ACTIVITY" | "NOTE" | "QUERY";
   title: string;
   summary: string;
   lifeAreaName?: string;
+  planResponse?: ConversationalPlanResponse;
 }
 
 export async function processQuickVoiceCommandAction(
@@ -1036,7 +1037,29 @@ export async function processQuickVoiceCommandAction(
     };
   }
 
-  // Pattern C: Task (default or explicit)
+  // Pattern C: Question, Advisory, Search, or Planning Query
+  // e.g. "Do I have anything today?", "What is on my schedule?", "What should I focus on?", "How does my day look?", "Can you move contract review to Friday?"
+  const isQuestionOrQuery =
+    /^(?:what|do\s+i|how|any|is\s+there|are\s+there|when|can\s+you|check|tell\s+me|should\s+i|where|summarize|give\s+me)\b/i.test(
+      trimmed
+    ) ||
+    /\b(?:do\s+i\s+have|what\s+do\s+i\s+have|what(?:'s|\s+is)\s+on|anything\s+today|my\s+schedule|my\s+agenda|what\s+should\s+i|focus\s+on)\b/i.test(
+      trimmed
+    ) ||
+    trimmed.endsWith("?");
+
+  if (isQuestionOrQuery) {
+    const planRes = await askOrbitPlannerAction(trimmed);
+    return {
+      ok: true,
+      intent: "QUERY",
+      title: trimmed,
+      summary: planRes.replyMarkdown,
+      planResponse: planRes,
+    };
+  }
+
+  // Pattern D: Task (default or explicit)
   // e.g. "Create a task to review contracts tomorrow", "Remind me to call John at 5pm", "Buy groceries"
   const cleanedTask = trimmed
     .replace(
