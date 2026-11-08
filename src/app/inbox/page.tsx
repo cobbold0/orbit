@@ -1,19 +1,16 @@
-import { Check } from "lucide-react";
 import { getCurrentUser } from "@/lib/auth/session";
 import { prisma } from "@/lib/db/prisma";
 import { OrbitShell } from "@/components/shell/orbit-shell";
-import { MemoryCaptureStudio } from "@/components/inbox/memory-capture-studio";
-import { AreaLabel, Dropdown, PageHeader } from "@/components/ui/page";
+import {
+  NotesClient,
+  type SavedNoteItem,
+} from "@/components/inbox/notes-client";
 import {
   CAPTURE_KIND_LABEL,
   CLASSIFICATION_LABEL,
   formatClock,
   formatShortDate,
 } from "@/lib/time/format";
-import {
-  approveAllActionableInboxAction,
-  resolveExtractedActionAction,
-} from "@/app/actions/orbit-actions";
 
 export const dynamic = "force-dynamic";
 
@@ -24,7 +21,7 @@ const ACTIONABLE = [
   "DEADLINE_MENTION",
 ];
 
-export default async function InboxPage() {
+export default async function NotesPage() {
   const user = await getCurrentUser();
   if (!user) return null;
 
@@ -51,11 +48,46 @@ export default async function InboxPage() {
   ]);
 
   const tz = pref?.ianaTimeZone ?? "Africa/Lagos";
+  const areaOptions = lifeAreas.map((a) => ({ id: a.id, name: a.name }));
   const pendingTotal = entries.reduce(
     (sum, e) =>
-      sum + e.extractedActions.filter((a) => a.reviewStatus === "PENDING_REVIEW").length,
+      sum +
+      e.extractedActions.filter((a) => a.reviewStatus === "PENDING_REVIEW")
+        .length,
     0
   );
+
+  const noteItems: SavedNoteItem[] = entries.map((entry) => ({
+    id: entry.id,
+    title: entry.title ?? "Captured note",
+    kindLabel: CAPTURE_KIND_LABEL[entry.captureKind] ?? "Note",
+    whenLabel: `${formatShortDate(entry.createdAt, tz)} ${formatClock(
+      entry.createdAt,
+      tz
+    )}`,
+    speakerContext: entry.speakerContext,
+    rawContent: entry.rawContent,
+    extractedActions: entry.extractedActions.map((a) => ({
+      id: a.id,
+      title: a.title,
+      lifeAreaId: a.lifeAreaId,
+      classification: a.classification,
+      classificationLabel:
+        CLASSIFICATION_LABEL[a.classification] ?? a.classification,
+      isActionable: ACTIONABLE.includes(a.classification),
+      sourceQuote: a.sourceQuote,
+      waitingOnTarget: a.waitingOnTarget,
+      suggestedCommitment: a.suggestedCommitment,
+      reviewStatus: a.reviewStatus,
+      lifeArea: a.lifeArea
+        ? {
+            name: a.lifeArea.name,
+            slug: a.lifeArea.slug,
+            colorToken: a.lifeArea.colorToken,
+          }
+        : null,
+    })),
+  }));
 
   return (
     <OrbitShell
@@ -63,205 +95,11 @@ export default async function InboxPage() {
       projects={projects}
       unreviewedInboxCount={pendingTotal}
     >
-      <div className="page">
-        <PageHeader title="Inbox" />
-
-        <MemoryCaptureStudio />
-
-        {entries.length === 0 && <p className="meta">No notes yet.</p>}
-
-        {entries.map((entry) => {
-          const actionable = entry.extractedActions.filter((a) =>
-            ACTIONABLE.includes(a.classification)
-          );
-          const others = entry.extractedActions.filter(
-            (a) => !ACTIONABLE.includes(a.classification)
-          );
-          const pending = actionable.filter((a) => a.reviewStatus === "PENDING_REVIEW");
-
-          return (
-            <article key={entry.id} className="card">
-              <div className="card-head">
-                <div className="min-w-0">
-                  <h2 className="h2">{entry.title ?? "Captured note"}</h2>
-                  <p className="meta">
-                    {CAPTURE_KIND_LABEL[entry.captureKind] ?? "Note"},{" "}
-                    {formatShortDate(entry.createdAt, tz)}{" "}
-                    {formatClock(entry.createdAt, tz)}
-                    {entry.speakerContext ? `, ${entry.speakerContext}` : ""}
-                  </p>
-                </div>
-                {pending.length > 0 && (
-                  <form action={approveAllActionableInboxAction}>
-                    <input type="hidden" name="inboxEntryId" value={entry.id} />
-                    <button type="submit" className="button button-primary">
-                      <Check className="h-4 w-4" aria-hidden="true" />
-                      <span>Approve all ({pending.length})</span>
-                    </button>
-                  </form>
-                )}
-              </div>
-
-              <details className="mt-3">
-                <summary className="meta cursor-pointer font-medium underline underline-offset-4">
-                  Original note
-                </summary>
-                <p className="mt-2 whitespace-pre-line text-[0.9375rem] text-[var(--text-2)]">
-                  {entry.rawContent}
-                </p>
-              </details>
-
-              {actionable.length > 0 && (
-                <div className="mt-5">
-                  <h3 className="h3">To review</h3>
-                  {actionable.map((item) => {
-                    const isPending = item.reviewStatus === "PENDING_REVIEW";
-                    return (
-                      <div key={item.id} className="row">
-                        <div className="row-main">
-                          <p className="title">{item.title}</p>
-                          <p className="meta flex flex-wrap items-center gap-x-3">
-                            {item.lifeArea && (
-                              <AreaLabel
-                                name={item.lifeArea.name}
-                                token={item.lifeArea.colorToken}
-                              />
-                            )}
-                            <span>
-                              {CLASSIFICATION_LABEL[item.classification] ??
-                                item.classification}
-                            </span>
-                          </p>
-                          {item.sourceQuote && (
-                            <p className="meta-soft mt-1">&ldquo;{item.sourceQuote}&rdquo;</p>
-                          )}
-                        </div>
-
-                        {isPending ? (
-                          <form
-                            action={resolveExtractedActionAction}
-                            className="row-actions"
-                          >
-                            <input type="hidden" name="extractedActionId" value={item.id} />
-                            <Dropdown label="Options" variant="ghost" form>
-                              <div className="space-y-3">
-                                <div>
-                                  <label htmlFor={`a-${item.id}`} className="label">
-                                    Area
-                                  </label>
-                                  <select
-                                    id={`a-${item.id}`}
-                                    name="overrideLifeAreaId"
-                                    defaultValue={item.lifeAreaId ?? lifeAreas[0]?.id ?? ""}
-                                    className="field"
-                                  >
-                                    {lifeAreas.map((a) => (
-                                      <option key={a.id} value={a.id}>
-                                        {a.name}
-                                      </option>
-                                    ))}
-                                  </select>
-                                </div>
-                                <div>
-                                  <label htmlFor={`c-${item.id}`} className="label">
-                                    Type
-                                  </label>
-                                  <select
-                                    id={`c-${item.id}`}
-                                    name="overrideCommitmentType"
-                                    defaultValue={
-                                      item.classification === "FOLLOW_UP" &&
-                                      item.waitingOnTarget
-                                        ? "WAITING"
-                                        : item.suggestedCommitment
-                                    }
-                                    className="field"
-                                  >
-                                    <option value="FLEXIBLE">Flexible</option>
-                                    <option value="WAITING">Waiting</option>
-                                    <option value="SCHEDULED">Scheduled</option>
-                                  </select>
-                                </div>
-                              </div>
-                            </Dropdown>
-                            <button
-                              type="submit"
-                              name="decision"
-                              value="APPROVE"
-                              className="button button-primary"
-                            >
-                              Approve
-                            </button>
-                            <button
-                              type="submit"
-                              name="decision"
-                              value="DISMISS"
-                              className="button button-ghost"
-                            >
-                              Dismiss
-                            </button>
-                          </form>
-                        ) : (
-                          <p className="meta-soft">
-                            {item.reviewStatus === "APPROVED" ? "Approved" : "Dismissed"}
-                          </p>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-
-              {others.length > 0 && (
-                <div className="mt-5">
-                  <h3 className="h3">Not tasks</h3>
-                  {others.map((item) => (
-                    <div key={item.id} className="row">
-                      <div className="row-main">
-                        <p className="title">{item.title}</p>
-                        <p className="meta">
-                          {CLASSIFICATION_LABEL[item.classification] ??
-                            item.classification}
-                        </p>
-                      </div>
-                      {item.reviewStatus === "PENDING_REVIEW" ? (
-                        <form
-                          action={resolveExtractedActionAction}
-                          className="row-actions"
-                        >
-                          <input type="hidden" name="extractedActionId" value={item.id} />
-                          <button
-                            type="submit"
-                            name="decision"
-                            value="APPROVE"
-                            className="button button-secondary"
-                          >
-                            {item.classification === "ALREADY_COMPLETED"
-                              ? "Log as done"
-                              : "Add as task"}
-                          </button>
-                          <button
-                            type="submit"
-                            name="decision"
-                            value="DISMISS"
-                            className="button button-ghost"
-                          >
-                            Dismiss
-                          </button>
-                        </form>
-                      ) : (
-                        <p className="meta-soft">
-                          {item.reviewStatus === "APPROVED" ? "Added" : "Dismissed"}
-                        </p>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              )}
-            </article>
-          );
-        })}
-      </div>
+      <NotesClient
+        entries={noteItems}
+        areaOptions={areaOptions}
+        pendingTotal={pendingTotal}
+      />
     </OrbitShell>
   );
 }

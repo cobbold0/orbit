@@ -4,7 +4,9 @@ import { getCurrentUser } from "@/lib/auth/session";
 import { getNowOverviewData } from "@/modules/now/now-service";
 import { OrbitShell } from "@/components/shell/orbit-shell";
 import { ConversationalPlanner } from "@/components/planning/conversational-planner";
-import { AreaLabel, Card, Dropdown } from "@/components/ui/page";
+import { AreaLabel, Card, PageHeader } from "@/components/ui/page";
+import { RescheduleTaskModal } from "@/components/modals/reschedule-task-modal";
+import { LogActivityModal } from "@/components/modals/activity-modals";
 import {
   formatClock,
   formatClockRange,
@@ -14,7 +16,6 @@ import {
 } from "@/lib/time/format";
 import {
   completeTaskAction,
-  logActivityCheckInAction,
   recoverOrRescheduleTaskAction,
   resolveInferredActivityAction,
   startTaskAction,
@@ -38,6 +39,7 @@ export default async function TodayPage() {
   const data = await getNowOverviewData(user.id);
   const tz = data.ianaTimeZone;
   const loc = data.activeLocationRoutine;
+  const areaOptions = data.lifeAreas.map((a) => ({ id: a.id, name: a.name }));
 
   const pendingActions = data.unreviewedInbox.reduce(
     (sum, entry) => sum + entry.extractedActions.length,
@@ -59,31 +61,38 @@ export default async function TodayPage() {
       unreviewedInboxCount={pendingActions}
     >
       <div className="page">
-        <header>
-          <h1 className="h1">{formatLongDate(data.wallClock.localDate)}</h1>
-          {loc && (
-            <p className="meta mt-1 inline-flex items-center gap-2">
-              <MapPin className="h-4 w-4" aria-hidden="true" />
-              <span>
-                {loc.physicalLocation ?? loc.title} until {loc.endTimeLocal}
+        <PageHeader
+          title={formatLongDate(data.wallClock.localDate)}
+          subtitle={
+            loc ? (
+              <span className="inline-flex items-center gap-2">
+                <MapPin className="h-4 w-4" aria-hidden="true" />
+                <span>
+                  {loc.physicalLocation ?? loc.title} until {loc.endTimeLocal}
+                </span>
               </span>
-            </p>
-          )}
-        </header>
+            ) : undefined
+          }
+        />
 
         <ConversationalPlanner />
 
         {data.needsCheckInTasks.length > 0 && (
           <Card title="Needs a check-in">
             {data.needsCheckInTasks.map((task) => (
-              <div key={task.id} className="row">
-                <div className="row-main">
+              <div key={task.id} className="orbit-row">
+                <div className="orbit-row-main">
                   <p className="title">{task.title}</p>
                   <p className="meta flex flex-wrap items-center gap-x-3">
-                    <AreaLabel
-                      name={task.lifeArea.name}
-                      token={task.lifeArea.colorToken}
-                    />
+                    <Link
+                      href={`/areas/${task.lifeArea.slug}`}
+                      className="hover:underline"
+                    >
+                      <AreaLabel
+                        name={task.lifeArea.name}
+                        token={task.lifeArea.colorToken}
+                      />
+                    </Link>
                     {task.scheduledStart && task.scheduledEnd && (
                       <span className="tabular">
                         {formatClockRange(
@@ -95,10 +104,10 @@ export default async function TodayPage() {
                     )}
                   </p>
                 </div>
-                <div className="row-actions">
+                <div className="orbit-row-actions">
                   <form action={completeTaskAction}>
                     <input type="hidden" name="taskId" value={task.id} />
-                    <button type="submit" className="button button-primary">
+                    <button type="submit" className="btn btn-primary btn-sm">
                       <Check className="h-4 w-4" aria-hidden="true" />
                       <span>Completed</span>
                     </button>
@@ -110,34 +119,16 @@ export default async function TodayPage() {
                       name="recoveryKind"
                       value="STILL_WORKING_30M"
                     />
-                    <button type="submit" className="button button-secondary">
+                    <button type="submit" className="btn btn-secondary btn-sm">
                       +30 min
                     </button>
                   </form>
-                  <Dropdown label="Move">
-                    <form action={recoverOrRescheduleTaskAction}>
-                      <input type="hidden" name="taskId" value={task.id} />
-                      <input
-                        type="hidden"
-                        name="recoveryKind"
-                        value="TOMORROW_AFTERNOON"
-                      />
-                      <button type="submit" className="menu-item">
-                        Tomorrow afternoon
-                      </button>
-                    </form>
-                    <form action={recoverOrRescheduleTaskAction}>
-                      <input type="hidden" name="taskId" value={task.id} />
-                      <input
-                        type="hidden"
-                        name="recoveryKind"
-                        value="MAKE_FLEXIBLE"
-                      />
-                      <button type="submit" className="menu-item">
-                        Make flexible
-                      </button>
-                    </form>
-                  </Dropdown>
+                  <RescheduleTaskModal
+                    taskId={task.id}
+                    taskTitle={task.title}
+                    commitmentType="SCHEDULED"
+                    triggerClassName="btn btn-ghost btn-sm"
+                  />
                 </div>
               </div>
             ))}
@@ -151,8 +142,8 @@ export default async function TodayPage() {
             focus.map((task) => {
               const isActive = task.id === data.activeCommitment?.id;
               return (
-                <div key={task.id} className="row">
-                  <div className="row-main">
+                <div key={task.id} className="orbit-row">
+                  <div className="orbit-row-main">
                     <p className="meta tabular">
                       {task.scheduledStart && task.scheduledEnd
                         ? formatClockRange(
@@ -165,17 +156,31 @@ export default async function TodayPage() {
                     </p>
                     <p className="title">{task.title}</p>
                     <p className="meta">
-                      <AreaLabel
-                        name={task.lifeArea.name}
-                        token={task.lifeArea.colorToken}
-                      />
+                      <Link
+                        href={`/areas/${task.lifeArea.slug}`}
+                        className="hover:underline"
+                      >
+                        <AreaLabel
+                          name={task.lifeArea.name}
+                          token={task.lifeArea.colorToken}
+                        />
+                      </Link>
                     </p>
                   </div>
-                  <div className="row-actions">
+                  <div className="orbit-row-actions">
+                    <RescheduleTaskModal
+                      taskId={task.id}
+                      taskTitle={task.title}
+                      commitmentType="SCHEDULED"
+                    />
                     {task.status !== "IN_PROGRESS" && (
                       <form action={startTaskAction}>
                         <input type="hidden" name="taskId" value={task.id} />
-                        <button type="submit" className="button button-secondary">
+                        <button
+                          type="submit"
+                          aria-label={`Start ${task.title}`}
+                          className="btn btn-secondary btn-sm"
+                        >
                           <Play className="h-4 w-4" aria-hidden="true" />
                           <span>Start</span>
                         </button>
@@ -183,7 +188,11 @@ export default async function TodayPage() {
                     )}
                     <form action={completeTaskAction}>
                       <input type="hidden" name="taskId" value={task.id} />
-                      <button type="submit" className="button button-primary">
+                      <button
+                        type="submit"
+                        aria-label={`Done ${task.title}`}
+                        className="btn btn-primary btn-sm"
+                      >
                         <Check className="h-4 w-4" aria-hidden="true" />
                         <span>Done</span>
                       </button>
@@ -199,7 +208,7 @@ export default async function TodayPage() {
           <Card
             title="Flexible"
             action={
-              <Link href="/areas" className="button button-ghost">
+              <Link href="/areas/tasks" className="btn btn-ghost btn-sm">
                 All tasks
               </Link>
             }
@@ -208,14 +217,19 @@ export default async function TodayPage() {
               <p className="meta mt-2">No flexible tasks.</p>
             )}
             {data.flexibleTasks.map((task) => (
-              <div key={task.id} className="row">
-                <div className="row-main">
+              <div key={task.id} className="orbit-row">
+                <div className="orbit-row-main">
                   <p className="title">{task.title}</p>
                   <p className="meta flex flex-wrap items-center gap-x-3">
-                    <AreaLabel
-                      name={task.lifeArea.name}
-                      token={task.lifeArea.colorToken}
-                    />
+                    <Link
+                      href={`/areas/${task.lifeArea.slug}`}
+                      className="hover:underline"
+                    >
+                      <AreaLabel
+                        name={task.lifeArea.name}
+                        token={task.lifeArea.colorToken}
+                      />
+                    </Link>
                     {task.estimatedMinutes && (
                       <span>{formatDuration(task.estimatedMinutes)}</span>
                     )}
@@ -224,13 +238,19 @@ export default async function TodayPage() {
                     )}
                   </p>
                 </div>
-                <div className="row-actions">
+                <div className="orbit-row-actions">
+                  <RescheduleTaskModal
+                    taskId={task.id}
+                    taskTitle={task.title}
+                    commitmentType="FLEXIBLE"
+                    defaultDateStr={data.wallClock.localDate}
+                  />
                   <form action={startTaskAction}>
                     <input type="hidden" name="taskId" value={task.id} />
                     <button
                       type="submit"
                       aria-label={`Start ${task.title}`}
-                      className="button button-ghost button-icon"
+                      className="btn btn-ghost btn-sm btn-square"
                     >
                       <Play className="h-4 w-4" aria-hidden="true" />
                     </button>
@@ -240,7 +260,7 @@ export default async function TodayPage() {
                     <button
                       type="submit"
                       aria-label={`Mark ${task.title} done`}
-                      className="button button-secondary button-icon"
+                      className="btn btn-secondary btn-sm btn-square"
                     >
                       <Check className="h-4 w-4" aria-hidden="true" />
                     </button>
@@ -250,20 +270,26 @@ export default async function TodayPage() {
             ))}
           </Card>
 
-          <Card title={extraDeadlines.length > 0 ? "Waiting and due" : "Waiting"}>
-            {extraDeadlines.length === 0 &&
-              data.waitingTasks.length === 0 && (
-                <p className="meta mt-2">Nothing waiting.</p>
-              )}
+          <Card
+            title={extraDeadlines.length > 0 ? "Waiting and due" : "Waiting"}
+          >
+            {extraDeadlines.length === 0 && data.waitingTasks.length === 0 && (
+              <p className="meta mt-2">Nothing waiting.</p>
+            )}
             {extraDeadlines.map((task) => (
-              <div key={task.id} className="row">
-                <div className="row-main">
+              <div key={task.id} className="orbit-row">
+                <div className="orbit-row-main">
                   <p className="title">{task.title}</p>
                   <p className="meta flex flex-wrap items-center gap-x-3">
-                    <AreaLabel
-                      name={task.lifeArea.name}
-                      token={task.lifeArea.colorToken}
-                    />
+                    <Link
+                      href={`/areas/${task.lifeArea.slug}`}
+                      className="hover:underline"
+                    >
+                      <AreaLabel
+                        name={task.lifeArea.name}
+                        token={task.lifeArea.colorToken}
+                      />
+                    </Link>
                     {task.dueDate && (
                       <span>Due {formatShortDate(task.dueDate, tz)}</span>
                     )}
@@ -272,14 +298,19 @@ export default async function TodayPage() {
               </div>
             ))}
             {data.waitingTasks.map((task) => (
-              <div key={task.id} className="row">
-                <div className="row-main">
+              <div key={task.id} className="orbit-row">
+                <div className="orbit-row-main">
                   <p className="title">{task.title}</p>
                   <p className="meta flex flex-wrap items-center gap-x-3">
-                    <AreaLabel
-                      name={task.lifeArea.name}
-                      token={task.lifeArea.colorToken}
-                    />
+                    <Link
+                      href={`/areas/${task.lifeArea.slug}`}
+                      className="hover:underline"
+                    >
+                      <AreaLabel
+                        name={task.lifeArea.name}
+                        token={task.lifeArea.colorToken}
+                      />
+                    </Link>
                     <span>Waiting on {task.waitingOnPerson ?? "someone"}</span>
                   </p>
                 </div>
@@ -289,68 +320,40 @@ export default async function TodayPage() {
         </div>
 
         {pendingActions > 0 && data.unreviewedInbox[0] && (
-          <Card title="Inbox">
-            <div className="row">
-              <div className="row-main">
+          <Card title="From your notes">
+            <div className="orbit-row">
+              <div className="orbit-row-main">
                 <p className="title">
                   {data.unreviewedInbox[0].title ?? "Captured note"}
                 </p>
                 <p className="meta">
-                  {pendingActions} {pendingActions === 1 ? "action" : "actions"}{" "}
-                  to review
+                  {pendingActions}{" "}
+                  {pendingActions === 1 ? "task" : "tasks"} spotted in your
+                  notes
                 </p>
               </div>
-              <Link href="/inbox" className="button button-secondary">
+              <Link href="/inbox" className="btn btn-secondary btn-sm">
                 Review
               </Link>
             </div>
           </Card>
         )}
 
-        <Card title="Activity today">
-          <form
-            action={logActivityCheckInAction}
-            className="mt-3 grid gap-2 sm:grid-cols-[1fr_11rem_auto]"
-          >
-            <label htmlFor="checkin-title" className="visually-hidden">
-              What are you working on
-            </label>
-            <input
-              id="checkin-title"
-              name="title"
-              type="text"
-              required
-              autoComplete="off"
-              placeholder="What are you working on?"
-              className="field"
+        <Card
+          title="Activity today"
+          action={
+            <LogActivityModal
+              lifeAreas={areaOptions}
+              triggerClassName="btn btn-secondary btn-sm"
             />
-            <label htmlFor="checkin-area" className="visually-hidden">
-              Area
-            </label>
-            <select
-              id="checkin-area"
-              name="lifeAreaId"
-              defaultValue={data.lifeAreas[0]?.id ?? ""}
-              className="field"
-            >
-              {data.lifeAreas.map((a) => (
-                <option key={a.id} value={a.id}>
-                  {a.name}
-                </option>
-              ))}
-            </select>
-            <button type="submit" className="button button-primary">
-              Log
-            </button>
-          </form>
-
-          <div className="mt-2">
-            {data.todayActivities.length === 0 && (
-              <p className="meta py-3">Nothing logged yet.</p>
-            )}
-            {data.todayActivities.map((act) => (
-              <div key={act.id} className="row">
-                <div className="row-main">
+          }
+        >
+          {data.todayActivities.length === 0 ? (
+            <p className="meta mt-2">Nothing logged yet today.</p>
+          ) : (
+            data.todayActivities.map((act) => (
+              <div key={act.id} className="orbit-row">
+                <div className="orbit-row-main">
                   <p className="title">{act.title}</p>
                   <p className="meta flex flex-wrap items-center gap-x-3">
                     <span className="tabular">
@@ -363,33 +366,33 @@ export default async function TodayPage() {
                       />
                     )}
                     {!act.isConfirmed && (
-                      <span className="font-semibold text-[#b45309]">
+                      <span className="font-semibold text-warning">
                         Not confirmed
                       </span>
                     )}
                   </p>
                 </div>
                 {!act.isConfirmed && (
-                  <div className="row-actions">
+                  <div className="orbit-row-actions">
                     <form action={resolveInferredActivityAction}>
                       <input type="hidden" name="activityId" value={act.id} />
                       <input type="hidden" name="decision" value="CONFIRM" />
-                      <button type="submit" className="button button-secondary">
+                      <button type="submit" className="btn btn-secondary btn-sm">
                         Confirm
                       </button>
                     </form>
                     <form action={resolveInferredActivityAction}>
                       <input type="hidden" name="activityId" value={act.id} />
                       <input type="hidden" name="decision" value="DISMISS" />
-                      <button type="submit" className="button button-ghost">
+                      <button type="submit" className="btn btn-ghost btn-sm">
                         Dismiss
                       </button>
                     </form>
                   </div>
                 )}
               </div>
-            ))}
-          </div>
+            ))
+          )}
         </Card>
       </div>
     </OrbitShell>

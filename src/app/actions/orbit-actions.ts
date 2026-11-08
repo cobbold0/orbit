@@ -5,9 +5,12 @@ import {
   CaptureKind,
   CommitmentType,
   ProjectKind,
+  ProjectStatus,
+  RoutineKind,
   ScheduleChangeReason,
   TaskPriority,
 } from "@prisma/client";
+import { Temporal } from "temporal-polyfill";
 import { getCurrentUser } from "@/lib/auth/session";
 import {
   confirmTaskCompletion,
@@ -21,9 +24,13 @@ import {
   createLifeArea,
   createProjectOrJourney,
   cycleMilestoneStatus,
+  deleteLifeArea,
+  reorderLifeAreas,
   updateLifeArea,
+  updateProjectOrJourney,
 } from "@/modules/life-areas/life-area-service";
 import {
+  createDeclaredRoutine,
   logExplicitActivityCheckIn,
   resolveInferredActivity,
   resolveSuggestedRoutine,
@@ -45,7 +52,7 @@ import { prisma } from "@/lib/db/prisma";
 function revalidateAllOrbitViews() {
   revalidatePath("/");
   revalidatePath("/timeline");
-  revalidatePath("/areas");
+  revalidatePath("/areas", "layout");
   revalidatePath("/routines");
   revalidatePath("/inbox");
 }
@@ -175,16 +182,22 @@ export async function recoverOrRescheduleTaskAction(formData: FormData) {
       reason: ScheduleChangeReason.USER_RESCHEDULED,
       note: "Extended commitment by 30 minutes (still working)",
     });
-  } else if (recoveryKind === "TOMORROW_AFTERNOON") {
+  } else if (
+    recoveryKind === "TOMORROW_MORNING" ||
+    recoveryKind === "TOMORROW_AFTERNOON"
+  ) {
     const pref = await prisma.userPreference.findUnique({ where: { userId } });
     const ianaTimeZone = pref?.ianaTimeZone ?? "Africa/Lagos";
-    const tomorrow = new Date(now.getTime() + 24 * 60 * 60 * 1000);
-    const yyyy = tomorrow.getUTCFullYear();
-    const mm = String(tomorrow.getUTCMonth() + 1).padStart(2, "0");
-    const dd = String(tomorrow.getUTCDate()).padStart(2, "0");
+    const tomorrowLocal = Temporal.Instant.fromEpochMilliseconds(now.getTime())
+      .toZonedDateTimeISO(ianaTimeZone)
+      .toPlainDate()
+      .add({ days: 1 })
+      .toString();
+    const targetClock =
+      recoveryKind === "TOMORROW_MORNING" ? "09:30" : "14:00";
     const resolved = resolveLocalDateTimeToUtc(
-      `${yyyy}-${mm}-${dd}`,
-      "14:00",
+      tomorrowLocal,
+      targetClock,
       ianaTimeZone
     );
     const dur = task.estimatedMinutes ?? 60;
@@ -195,8 +208,33 @@ export async function recoverOrRescheduleTaskAction(formData: FormData) {
       newStart: resolved.instantUtc,
       newEnd,
       reason: ScheduleChangeReason.USER_RESCHEDULED,
-      note: "Moved to tomorrow afternoon",
+      note:
+        recoveryKind === "TOMORROW_MORNING"
+          ? "Moved to tomorrow morning"
+          : "Moved to tomorrow afternoon",
     });
+  } else if (recoveryKind === "CUSTOM_SCHEDULE") {
+    const scheduledDate = String(formData.get("scheduledDate") ?? "").trim();
+    const scheduledTime =
+      String(formData.get("scheduledTime") ?? "").trim() || "14:00";
+    if (scheduledDate) {
+      const pref = await prisma.userPreference.findUnique({ where: { userId } });
+      const ianaTimeZone = pref?.ianaTimeZone ?? "Africa/Lagos";
+      const resolved = resolveLocalDateTimeToUtc(
+        scheduledDate,
+        scheduledTime,
+        ianaTimeZone
+      );
+      const dur = task.estimatedMinutes ?? 60;
+      const newEnd = new Date(resolved.instantUtc.getTime() + dur * 60 * 1000);
+      await rescheduleOrChangeCommitment(userId, taskId, {
+        newCommitmentType: CommitmentType.SCHEDULED,
+        newStart: resolved.instantUtc,
+        newEnd,
+        reason: ScheduleChangeReason.USER_RESCHEDULED,
+        note: `Scheduled for ${scheduledDate} at ${scheduledTime}`,
+      });
+    }
   } else if (recoveryKind === "MAKE_FLEXIBLE") {
     await rescheduleOrChangeCommitment(userId, taskId, {
       newCommitmentType: CommitmentType.FLEXIBLE,
@@ -228,9 +266,10 @@ export async function createLifeAreaAction(formData: FormData) {
   const name = String(formData.get("name") ?? "").trim();
   const description = String(formData.get("description") ?? "").trim();
   const colorToken = String(formData.get("colorToken") ?? "slate").trim();
+  const iconName = String(formData.get("iconName") ?? "CircleDot").trim();
   if (!name) return;
 
-  await createLifeArea(userId, { name, description, colorToken });
+  await createLifeArea(userId, { name, description, colorToken, iconName });
   revalidateAllOrbitViews();
 }
 
@@ -248,12 +287,106 @@ export async function updateLifeAreaAction(formData: FormData) {
     await updateLifeArea(userId, areaId, { direction: "UP" });
   } else if (operation === "MOVE_DOWN") {
     await updateLifeArea(userId, areaId, { direction: "DOWN" });
-  } else if (operation === "RENAME") {
+  } else if (operation === "RENAME" || operation === "EDIT") {
     const name = String(formData.get("name") ?? "").trim();
-    if (name) {
-      await updateLifeArea(userId, areaId, { name });
-    }
+    const colorToken = String(formData.get("colorToken") ?? "").trim();
+    const iconName = String(formData.get("iconName") ?? "").trim();
+    const description = formData.has("description")
+      ? String(formData.get("description") ?? "")
+      : undefined;
+    await updateLifeArea(userId, areaId, {
+      ...(name ? { name } : {}),
+      ...(colorToken ? { colorToken } : {}),
+      ...(iconName ? { iconName } : {}),
+      ...(description !== undefined ? { description } : {}),
+    });
   }
+
+  revalidateAllOrbitViews();
+}
+
+export async function reorderLifeAreasAction(orderedAreaIds: string[]) {
+  const userId = await requireUserId();
+  await reorderLifeAreas(userId, orderedAreaIds);
+  revalidateAllOrbitViews();
+}
+
+export async function deleteLifeAreaAction(
+  formData: FormData
+): Promise<{ ok: boolean; error?: string }> {
+  const userId = await requireUserId();
+  const areaId = String(formData.get("areaId") ?? "").trim();
+  if (!areaId) return { ok: false, error: "Area not found." };
+
+  try {
+    await deleteLifeArea(userId, areaId);
+    revalidateAllOrbitViews();
+    return { ok: true };
+  } catch (err) {
+    return {
+      ok: false,
+      error: err instanceof Error ? err.message : "Could not delete area.",
+    };
+  }
+}
+
+export async function updateProjectAction(formData: FormData) {
+  const userId = await requireUserId();
+  const projectId = String(formData.get("projectId") ?? "").trim();
+  if (!projectId) return;
+
+  const operation = String(formData.get("operation") ?? "EDIT");
+  if (operation === "ARCHIVE") {
+    await updateProjectOrJourney(userId, projectId, {
+      status: ProjectStatus.ARCHIVED,
+    });
+    revalidateAllOrbitViews();
+    return;
+  }
+
+  const title = String(formData.get("title") ?? "").trim();
+  const description = String(formData.get("description") ?? "");
+  const lifeAreaId = String(formData.get("lifeAreaId") ?? "").trim();
+  const kind = (formData.get("kind") as ProjectKind) || undefined;
+
+  await updateProjectOrJourney(userId, projectId, {
+    ...(title ? { title } : {}),
+    description,
+    ...(lifeAreaId ? { lifeAreaId } : {}),
+    ...(kind ? { kind } : {}),
+  });
+
+  revalidateAllOrbitViews();
+}
+
+export async function createRoutineAction(formData: FormData) {
+  const userId = await requireUserId();
+  const title = String(formData.get("title") ?? "").trim();
+  if (!title) return;
+
+  const lifeAreaId = String(formData.get("lifeAreaId") ?? "").trim() || null;
+  const kind =
+    (formData.get("kind") as RoutineKind) || RoutineKind.WORK_BLOCK;
+  const startTimeLocal =
+    String(formData.get("startTimeLocal") ?? "").trim() || "09:00";
+  const endTimeLocal =
+    String(formData.get("endTimeLocal") ?? "").trim() || "17:00";
+  const physicalLocation =
+    String(formData.get("physicalLocation") ?? "").trim() || null;
+  const daysOfWeek = formData
+    .getAll("daysOfWeek")
+    .map((v) => parseInt(String(v), 10))
+    .filter((n) => !Number.isNaN(n) && n >= 1 && n <= 7);
+
+  await createDeclaredRoutine(userId, {
+    title,
+    lifeAreaId,
+    kind,
+    daysOfWeek,
+    startTimeLocal,
+    endTimeLocal,
+    physicalLocation,
+  });
 
   revalidateAllOrbitViews();
 }

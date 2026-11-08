@@ -40,6 +40,16 @@ export async function getLifeAreasAndProjectsData(userId: string) {
     }),
     prisma.lifeArea.findMany({
       where: { userId, isArchived: true },
+      include: {
+        projects: {
+          where: { status: { not: ProjectStatus.ARCHIVED } },
+          select: { id: true },
+        },
+        tasks: {
+          where: { status: { not: TaskStatus.ARCHIVED } },
+          select: { id: true, status: true },
+        },
+      },
       orderBy: { sortOrder: "asc" },
     }),
     prisma.project.findMany({
@@ -86,13 +96,24 @@ export async function createLifeArea(
     name: string;
     description?: string;
     colorToken: string;
+    iconName?: string;
   }
 ) {
   const baseSlug = input.name
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-|-$/g, "");
-  const slug = baseSlug || `area-${Date.now()}`;
+  const reserved = new Set(["manage", "tasks", "projects"]);
+  const safeBase =
+    !baseSlug || reserved.has(baseSlug) ? `area-${Date.now()}` : baseSlug;
+
+  const existing = await prisma.lifeArea.findFirst({
+    where: { userId, slug: safeBase },
+    select: { id: true },
+  });
+  const slug = existing
+    ? `${safeBase}-${Math.floor(Math.random() * 900 + 100)}`
+    : safeBase;
 
   const maxSort = await prisma.lifeArea.aggregate({
     where: { userId },
@@ -103,9 +124,10 @@ export async function createLifeArea(
     data: {
       userId,
       name: input.name.trim(),
-      slug: `${slug}-${Math.floor(Math.random() * 900 + 100)}`,
+      slug,
       description: input.description?.trim() || null,
       colorToken: input.colorToken,
+      iconName: input.iconName || "CircleDot",
       sortOrder: (maxSort._max.sortOrder ?? 0) + 1,
     },
   });
@@ -118,6 +140,7 @@ export async function updateLifeArea(
     name?: string;
     description?: string;
     colorToken?: string;
+    iconName?: string;
     isArchived?: boolean;
     direction?: "UP" | "DOWN";
   }
@@ -158,6 +181,7 @@ export async function updateLifeArea(
         ? { description: input.description.trim() || null }
         : {}),
       ...(input.colorToken ? { colorToken: input.colorToken } : {}),
+      ...(input.iconName ? { iconName: input.iconName } : {}),
       ...(input.isArchived !== undefined
         ? {
             isArchived: input.isArchived,
@@ -165,6 +189,48 @@ export async function updateLifeArea(
           }
         : {}),
     },
+  });
+}
+
+export async function reorderLifeAreas(
+  userId: string,
+  orderedAreaIds: string[]
+) {
+  if (orderedAreaIds.length === 0) return;
+
+  const owned = await prisma.lifeArea.findMany({
+    where: { userId, id: { in: orderedAreaIds } },
+    select: { id: true },
+  });
+  const ownedSet = new Set(owned.map((a) => a.id));
+  const validIds = orderedAreaIds.filter((id) => ownedSet.has(id));
+  if (validIds.length === 0) return;
+
+  await prisma.$transaction(
+    validIds.map((id, idx) =>
+      prisma.lifeArea.update({
+        where: { id },
+        data: { sortOrder: idx + 1 },
+      })
+    )
+  );
+}
+
+export async function deleteLifeArea(userId: string, areaId: string) {
+  const [area, totalCount] = await Promise.all([
+    prisma.lifeArea.findFirst({ where: { id: areaId, userId } }),
+    prisma.lifeArea.count({ where: { userId } }),
+  ]);
+
+  if (!area) throw new Error("Life area not found");
+  if (totalCount <= 1) {
+    throw new Error("Keep at least one life area in Orbit.");
+  }
+
+  await prisma.$transaction(async (tx) => {
+    await tx.task.deleteMany({ where: { userId, lifeAreaId: area.id } });
+    await tx.project.deleteMany({ where: { userId, lifeAreaId: area.id } });
+    await tx.lifeArea.delete({ where: { id: area.id } });
   });
 }
 
@@ -285,4 +351,85 @@ export async function cycleMilestoneStatus(
 
     return updated;
   });
+}
+
+export async function updateProjectOrJourney(
+  userId: string,
+  projectId: string,
+  input: {
+    title?: string;
+    description?: string;
+    lifeAreaId?: string;
+    kind?: ProjectKind;
+    status?: ProjectStatus;
+  }
+) {
+  const project = await prisma.project.findFirst({
+    where: { id: projectId, userId },
+  });
+  if (!project) throw new Error("Project not found");
+
+  return prisma.project.update({
+    where: { id: project.id },
+    data: {
+      ...(input.title ? { title: input.title.trim() } : {}),
+      ...(input.description !== undefined
+        ? { description: input.description.trim() || null }
+        : {}),
+      ...(input.lifeAreaId ? { lifeAreaId: input.lifeAreaId } : {}),
+      ...(input.kind ? { kind: input.kind } : {}),
+      ...(input.status ? { status: input.status } : {}),
+    },
+  });
+}
+
+export async function getSingleLifeAreaBySlug(userId: string, slug: string) {
+  const [pref, area, lifeAreas, allProjects] = await Promise.all([
+    prisma.userPreference.findUnique({ where: { userId } }),
+    prisma.lifeArea.findFirst({
+      where: { userId, slug },
+      include: {
+        projects: {
+          where: { status: { not: ProjectStatus.ARCHIVED } },
+          include: {
+            milestones: { orderBy: { sortOrder: "asc" } },
+            tasks: {
+              where: { status: { not: TaskStatus.ARCHIVED } },
+              orderBy: [{ status: "asc" }, { priority: "desc" }],
+            },
+          },
+          orderBy: { sortOrder: "asc" },
+        },
+        tasks: {
+          where: { status: { not: TaskStatus.ARCHIVED } },
+          include: { project: true, milestone: true, lifeArea: true },
+          orderBy: [{ status: "asc" }, { priority: "desc" }, { createdAt: "desc" }],
+        },
+        routines: {
+          where: { isActive: true },
+          orderBy: { createdAt: "asc" },
+        },
+        activityRecords: {
+          orderBy: { startedAt: "desc" },
+          take: 10,
+        },
+      },
+    }),
+    prisma.lifeArea.findMany({
+      where: { userId, isArchived: false },
+      orderBy: { sortOrder: "asc" },
+    }),
+    prisma.project.findMany({
+      where: { userId, status: ProjectStatus.ACTIVE },
+      select: { id: true, title: true, lifeAreaId: true },
+      orderBy: { sortOrder: "asc" },
+    }),
+  ]);
+
+  return {
+    ianaTimeZone: pref?.ianaTimeZone ?? "Africa/Lagos",
+    area,
+    lifeAreas,
+    allProjects,
+  };
 }

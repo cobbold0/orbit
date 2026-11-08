@@ -6,12 +6,11 @@ import {
   type TimelineDayModel,
 } from "@/modules/timeline/timeline-service";
 import { OrbitShell } from "@/components/shell/orbit-shell";
-import { AreaDot, AreaLabel, Card, Dropdown } from "@/components/ui/page";
+import { AreaDot, AreaLabel, Card, PageHeader } from "@/components/ui/page";
+import { RescheduleTaskModal } from "@/components/modals/reschedule-task-modal";
+import { ScheduleWindowModal } from "@/components/modals/schedule-window-modal";
 import { formatDuration, formatLongDate } from "@/lib/time/format";
-import {
-  completeTaskAction,
-  recoverOrRescheduleTaskAction,
-} from "@/app/actions/orbit-actions";
+import { completeTaskAction } from "@/app/actions/orbit-actions";
 import { prisma } from "@/lib/db/prisma";
 import { getUnreviewedInboxActionCount } from "@/lib/shell-data";
 
@@ -21,15 +20,17 @@ interface TimelinePageProps {
   searchParams: Promise<{ date?: string; view?: "day" | "week" }>;
 }
 
-type FlexTask = {
-  id: string;
-  title: string;
-  lifeArea: { name: string };
-};
-
 type DayItem =
-  | { kind: "task"; start: Date; task: TimelineDayModel["scheduledCommitments"][number] }
-  | { kind: "free"; start: Date; win: TimelineDayModel["availableWindows"][number] };
+  | {
+      kind: "task";
+      start: Date;
+      task: TimelineDayModel["scheduledCommitments"][number];
+    }
+  | {
+      kind: "free";
+      start: Date;
+      win: TimelineDayModel["availableWindows"][number];
+    };
 
 function buildDayItems(day: TimelineDayModel): DayItem[] {
   const items: DayItem[] = [
@@ -41,33 +42,6 @@ function buildDayItems(day: TimelineDayModel): DayItem[] {
     ),
   ];
   return items.sort((a, b) => a.start.getTime() - b.start.getTime());
-}
-
-function SlotMenu({
-  startIso,
-  tasks,
-}: {
-  startIso: string;
-  tasks: FlexTask[];
-}) {
-  if (tasks.length === 0) return null;
-  return (
-    <Dropdown label="Schedule" variant="secondary">
-      {tasks.map((t) => (
-        <form key={t.id} action={recoverOrRescheduleTaskAction}>
-          <input type="hidden" name="taskId" value={t.id} />
-          <input type="hidden" name="recoveryKind" value="SLOT_INTO_WINDOW" />
-          <input type="hidden" name="windowStartIso" value={startIso} />
-          <button type="submit" className="menu-item">
-            <span className="min-w-0">
-              <span className="block truncate">{t.title}</span>
-              <span className="meta-soft block">{t.lifeArea.name}</span>
-            </span>
-          </button>
-        </form>
-      ))}
-    </Dropdown>
-  );
 }
 
 export default async function TimelinePage({ searchParams }: TimelinePageProps) {
@@ -98,51 +72,61 @@ export default async function TimelinePage({ searchParams }: TimelinePageProps) 
       unreviewedInboxCount={unreviewedInboxCount}
     >
       <div className="page">
-        <header className="flex flex-wrap items-center justify-between gap-3">
-          <h1 className="h1">
-            {view === "day" ? formatLongDate(focal.dateStr) : "This week"}
-          </h1>
-          <div className="flex flex-wrap items-center gap-3">
-            <div className="flex items-center gap-1">
-              <Link
-                href={nav(timeline.previousWeekDateStr)}
-                aria-label="Previous week"
-                className="button button-ghost button-icon"
-              >
-                <ChevronLeft className="h-5 w-5" aria-hidden="true" />
-              </Link>
-              <Link href={nav(timeline.todayDateStr)} className="button button-ghost">
-                Today
-              </Link>
-              <Link
-                href={nav(timeline.nextWeekDateStr)}
-                aria-label="Next week"
-                className="button button-ghost button-icon"
-              >
-                <ChevronRight className="h-5 w-5" aria-hidden="true" />
-              </Link>
-            </div>
-            <div className="segmented" role="group" aria-label="View">
-              <Link
-                href={nav(focal.dateStr, "day")}
-                className="segmented-item"
-                aria-pressed={view === "day"}
-              >
-                Day
-              </Link>
-              <Link
-                href={nav(focal.dateStr, "week")}
-                className="segmented-item"
-                aria-pressed={view === "week"}
-              >
-                Week
-              </Link>
-            </div>
+        <PageHeader
+          title={view === "day" ? formatLongDate(focal.dateStr) : "This week"}
+        >
+          <div
+            role="tablist"
+            aria-label="Timeline range"
+            className="tabs tabs-box tabs-sm"
+          >
+            <Link
+              href={nav(focal.dateStr, "day")}
+              role="tab"
+              aria-selected={view === "day"}
+              className={`tab font-medium ${view === "day" ? "tab-active" : ""}`}
+            >
+              Day
+            </Link>
+            <Link
+              href={nav(focal.dateStr, "week")}
+              role="tab"
+              aria-selected={view === "week"}
+              className={`tab font-medium ${view === "week" ? "tab-active" : ""}`}
+            >
+              Week
+            </Link>
           </div>
-        </header>
+        </PageHeader>
 
-        {/* Week strip */}
-        <nav aria-label="Days" className="grid grid-cols-7 gap-1.5 sm:gap-2">
+        {/* Week navigation + 7-day selector strip */}
+        <div className="space-y-2">
+          <div className="flex items-center justify-between gap-2">
+            <Link
+              href={nav(timeline.previousWeekDateStr)}
+              aria-label="Previous week"
+              className="btn btn-ghost btn-sm"
+            >
+              <ChevronLeft className="h-4 w-4" aria-hidden="true" />
+              <span>Previous</span>
+            </Link>
+            <Link
+              href={nav(timeline.todayDateStr)}
+              className="btn btn-secondary btn-sm"
+            >
+              Today
+            </Link>
+            <Link
+              href={nav(timeline.nextWeekDateStr)}
+              aria-label="Next week"
+              className="btn btn-ghost btn-sm"
+            >
+              <span>Next</span>
+              <ChevronRight className="h-4 w-4" aria-hidden="true" />
+            </Link>
+          </div>
+
+          <nav aria-label="Days of week" className="grid grid-cols-7 gap-1.5 sm:gap-2">
           {timeline.days.map((d) => {
             const selected = d.dateStr === focal.dateStr;
             const place = d.locationContexts[0]?.physicalLocation?.replace(
@@ -153,11 +137,11 @@ export default async function TimelinePage({ searchParams }: TimelinePageProps) 
               <Link
                 key={d.dateStr}
                 href={nav(d.dateStr, "day")}
-                aria-current={selected && view === "day" ? "true" : undefined}
-                className={`flex min-h-[4.5rem] flex-col items-center justify-center rounded-xl px-1 py-2 text-center transition-colors ${
+                aria-current={selected && view === "day" ? "page" : undefined}
+                className={`flex min-h-[4.5rem] flex-col items-center justify-center rounded-2xl px-1 py-2 text-center transition-colors ${
                   selected && view === "day"
-                    ? "bg-[var(--ink)] text-white"
-                    : "bg-[var(--surface)] hover:bg-[var(--surface-strong)]"
+                    ? "bg-neutral text-neutral-content"
+                    : "bg-base-200 hover:bg-base-300/70"
                 }`}
               >
                 <span className="text-[0.8125rem] font-medium opacity-80">
@@ -165,7 +149,9 @@ export default async function TimelinePage({ searchParams }: TimelinePageProps) 
                 </span>
                 <span
                   className={`tabular text-lg font-semibold ${
-                    d.isToday && !(selected && view === "day") ? "underline underline-offset-4" : ""
+                    d.isToday && !(selected && view === "day")
+                      ? "underline underline-offset-4"
+                      : ""
                   }`}
                 >
                   {d.dayNumber}
@@ -176,18 +162,22 @@ export default async function TimelinePage({ searchParams }: TimelinePageProps) 
               </Link>
             );
           })}
-        </nav>
+          </nav>
+        </div>
 
         {view === "day" ? (
-          <div className="grid gap-5 lg:grid-cols-[1fr_20rem]">
+          <div className="grid items-start gap-5 lg:grid-cols-[1fr_20rem]">
             <div className="flex min-w-0 flex-col gap-5">
               <Card title="Schedule">
                 {focal.locationContexts.map((loc) => (
-                  <p key={loc.id} className="meta mt-1 inline-flex items-center gap-2">
+                  <p
+                    key={loc.id}
+                    className="meta mt-1 inline-flex items-center gap-2"
+                  >
                     <MapPin className="h-4 w-4" aria-hidden="true" />
                     <span>
-                      {loc.physicalLocation ?? loc.title}, {loc.startTimeLocal} to{" "}
-                      {loc.endTimeLocal}
+                      {loc.physicalLocation ?? loc.title}, {loc.startTimeLocal}{" "}
+                      to {loc.endTimeLocal}
                     </span>
                   </p>
                 ))}
@@ -199,8 +189,8 @@ export default async function TimelinePage({ searchParams }: TimelinePageProps) 
                 <div className="mt-2">
                   {items.map((item) =>
                     item.kind === "task" ? (
-                      <div key={item.task.id} className="row">
-                        <div className="row-main">
+                      <div key={item.task.id} className="orbit-row">
+                        <div className="orbit-row-main">
                           <p className="meta tabular">
                             {item.task.startLabel} to {item.task.endLabel}
                           </p>
@@ -215,27 +205,38 @@ export default async function TimelinePage({ searchParams }: TimelinePageProps) 
                         {item.task.status === "COMPLETED" ? (
                           <p className="meta-soft">Completed</p>
                         ) : (
-                          <div className="row-actions">
+                          <div className="orbit-row-actions">
+                            <RescheduleTaskModal
+                              taskId={item.task.id}
+                              taskTitle={item.task.title}
+                              commitmentType="SCHEDULED"
+                              defaultDateStr={focal.dateStr}
+                              defaultTimeStr={item.task.startLabel}
+                            />
                             <form action={completeTaskAction}>
-                              <input type="hidden" name="taskId" value={item.task.id} />
-                              <button type="submit" className="button button-secondary">
+                              <input
+                                type="hidden"
+                                name="taskId"
+                                value={item.task.id}
+                              />
+                              <button
+                                type="submit"
+                                aria-label={`Done ${item.task.title}`}
+                                className="btn btn-secondary btn-sm"
+                              >
                                 <Check className="h-4 w-4" aria-hidden="true" />
                                 <span>Done</span>
-                              </button>
-                            </form>
-                            <form action={recoverOrRescheduleTaskAction}>
-                              <input type="hidden" name="taskId" value={item.task.id} />
-                              <input type="hidden" name="recoveryKind" value="MAKE_FLEXIBLE" />
-                              <button type="submit" className="button button-ghost">
-                                Unschedule
                               </button>
                             </form>
                           </div>
                         )}
                       </div>
                     ) : (
-                      <div key={item.win.startUtc.toISOString()} className="row">
-                        <div className="row-main">
+                      <div
+                        key={item.win.startUtc.toISOString()}
+                        className="orbit-row"
+                      >
+                        <div className="orbit-row-main">
                           <p className="meta-soft tabular">
                             {item.win.startLabel} to {item.win.endLabel}
                           </p>
@@ -243,8 +244,10 @@ export default async function TimelinePage({ searchParams }: TimelinePageProps) 
                             Free for {formatDuration(item.win.durationMinutes)}
                           </p>
                         </div>
-                        <SlotMenu
-                          startIso={item.win.startUtc.toISOString()}
+                        <ScheduleWindowModal
+                          dateStr={focal.dateStr}
+                          startLabel={item.win.startLabel}
+                          endLabel={item.win.endLabel}
                           tasks={flex}
                         />
                       </div>
@@ -258,16 +261,19 @@ export default async function TimelinePage({ searchParams }: TimelinePageProps) 
                   <p className="meta mt-2">Nothing logged.</p>
                 )}
                 {focal.observedActivities.map((act) => (
-                  <div key={act.id} className="row">
-                    <div className="row-main">
+                  <div key={act.id} className="orbit-row">
+                    <div className="orbit-row-main">
                       <p className="title">{act.title}</p>
                       <p className="meta flex flex-wrap items-center gap-x-3">
                         <span className="tabular">{act.startLabel}</span>
                         {act.lifeAreaName && (
-                          <AreaLabel name={act.lifeAreaName} token={act.colorToken} />
+                          <AreaLabel
+                            name={act.lifeAreaName}
+                            token={act.colorToken}
+                          />
                         )}
                         {!act.isConfirmed && (
-                          <span className="font-semibold text-[#b45309]">
+                          <span className="font-semibold text-warning">
                             Not confirmed
                           </span>
                         )}
@@ -278,31 +284,44 @@ export default async function TimelinePage({ searchParams }: TimelinePageProps) 
               </Card>
             </div>
 
-            <Card title="Flexible" className="h-fit">
-              {flex.length === 0 && <p className="meta mt-2">No flexible tasks.</p>}
+            <Card title="Flexible">
+              {flex.length === 0 && (
+                <p className="meta mt-2">No flexible tasks.</p>
+              )}
               {flex.map((t) => (
-                <div key={t.id} className="row">
-                  <div className="row-main">
+                <div key={t.id} className="orbit-row">
+                  <div className="orbit-row-main">
                     <p className="title">{t.title}</p>
                     <p className="meta flex flex-wrap items-center gap-x-3">
-                      <AreaLabel name={t.lifeArea.name} token={t.lifeArea.colorToken} />
+                      <AreaLabel
+                        name={t.lifeArea.name}
+                        token={t.lifeArea.colorToken}
+                      />
                       {t.estimatedMinutes && (
                         <span>{formatDuration(t.estimatedMinutes)}</span>
                       )}
                     </p>
                   </div>
+                  <RescheduleTaskModal
+                    taskId={t.id}
+                    taskTitle={t.title}
+                    commitmentType="FLEXIBLE"
+                    defaultDateStr={focal.dateStr}
+                  />
                 </div>
               ))}
             </Card>
           </div>
         ) : (
-          <Card>
+          <Card title="Week schedule">
             {timeline.days.map((day) => (
-              <div key={day.dateStr} className="row items-start">
+              <div key={day.dateStr} className="orbit-row items-start">
                 <div className="w-full sm:w-40 sm:shrink-0">
                   <Link
                     href={nav(day.dateStr, "day")}
-                    className={`title ${day.isToday ? "underline underline-offset-4" : ""}`}
+                    className={`title hover:underline ${
+                      day.isToday ? "underline underline-offset-4" : ""
+                    }`}
                   >
                     {day.dayNameShort} {day.dayNumber} {day.monthShort}
                   </Link>
@@ -318,7 +337,9 @@ export default async function TimelinePage({ searchParams }: TimelinePageProps) 
                   )}
                   {day.scheduledCommitments.map((c) => (
                     <p key={c.id} className="flex items-start gap-3">
-                      <span className="meta tabular w-12 shrink-0">{c.startLabel}</span>
+                      <span className="meta tabular w-12 shrink-0">
+                        {c.startLabel}
+                      </span>
                       <span className="flex min-w-0 items-start gap-2">
                         <span className="mt-[0.4rem]">
                           <AreaDot token={c.colorToken} />

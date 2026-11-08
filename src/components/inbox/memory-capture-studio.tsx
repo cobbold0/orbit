@@ -1,11 +1,14 @@
 "use client";
 
-import React, { useEffect, useRef, useState } from "react";
-import { Mic, Pause, Play, Square } from "lucide-react";
+import React, { useEffect, useId, useRef, useState } from "react";
+import { Mic, Pause, Pencil, Play, Plus, Square } from "lucide-react";
 import {
   captureMemoryInboxAction,
+  resolveExtractedActionAction,
   transcribeAudioBase64Action,
 } from "@/app/actions/orbit-actions";
+import { OrbitModal, SubmitButton } from "@/components/ui/orbit-modal";
+import { useOrbitToast } from "@/components/ui/orbit-toast";
 
 type Kind = "TEXT_NOTE" | "MEETING_NOTES" | "VOICE_NOTE" | "PASTED_MESSAGE";
 
@@ -28,13 +31,25 @@ interface SpeechRec {
   onerror: (() => void) | null;
 }
 
-export function MemoryCaptureStudio() {
+export function MemoryCaptureForm({
+  textareaRef,
+  onSuccess,
+  onCancel,
+}: {
+  textareaRef?: React.RefObject<HTMLTextAreaElement | null>;
+  onSuccess: () => void;
+  onCancel: () => void;
+}) {
+  const idBase = useId();
+  const internalTextareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const resolvedTextareaRef = textareaRef ?? internalTextareaRef;
+  const { notify } = useOrbitToast();
+
   const [kind, setKind] = useState<Kind>("TEXT_NOTE");
   const [text, setText] = useState("");
   const [title, setTitle] = useState("");
   const [source, setSource] = useState("");
   const [consent, setConsent] = useState(false);
-  const [busy, setBusy] = useState(false);
 
   const [recording, setRecording] = useState(false);
   const [paused, setPaused] = useState(false);
@@ -87,7 +102,9 @@ export function MemoryCaptureStudio() {
         rec.onresult = (e) => {
           const piece = e.results[e.results.length - 1]?.[0]?.transcript ?? "";
           if (piece.trim()) {
-            setText((prev) => (prev ? `${prev.trim()} ${piece.trim()}` : piece.trim()));
+            setText((prev) =>
+              prev ? `${prev.trim()} ${piece.trim()}` : piece.trim()
+            );
           }
         };
         rec.onerror = () => {};
@@ -116,15 +133,19 @@ export function MemoryCaptureStudio() {
           reader.onloadend = async () => {
             const base64 = String(reader.result ?? "").split(",")[1];
             if (!base64) return;
-            setStatus("Transcribing");
+            setStatus("Transcribing audio...");
             try {
               const res = await transcribeAudioBase64Action(base64, blob.type);
               if (res.transcript) {
-                setText((prev) => (prev ? `${prev}\n${res.transcript}` : res.transcript));
+                setText((prev) =>
+                  prev ? `${prev}\n${res.transcript}` : res.transcript
+                );
               }
               setStatus(null);
             } catch {
-              setStatus("Could not transcribe the audio. You can type the note instead.");
+              setStatus(
+                "Could not transcribe the audio. Type or paste the note instead."
+              );
             }
           };
           reader.readAsDataURL(blob);
@@ -132,7 +153,9 @@ export function MemoryCaptureStudio() {
         recorder.start();
         recorderRef.current = recorder;
       } catch {
-        setStatus("Microphone access was denied. Type or paste the note instead.");
+        setStatus(
+          "Microphone access was denied. Type or paste the note instead."
+        );
       }
     }
   }
@@ -167,37 +190,51 @@ export function MemoryCaptureStudio() {
   ).padStart(2, "0")}`;
 
   return (
-    <section className="card">
-      <div className="card-head">
-        <h2 className="h2">Capture</h2>
-        <div className="segmented" role="group" aria-label="Type">
-          {KINDS.map((k) => (
-            <button
-              key={k.id}
-              type="button"
-              className="segmented-item"
-              aria-pressed={kind === k.id}
-              onClick={() => setKind(k.id)}
-            >
-              {k.label}
-            </button>
-          ))}
-        </div>
+    <div>
+      <p className="meta mb-3">
+        Save thoughts, meeting notes, or a voice memo. Orbit spots tasks inside
+        your note for you to approve in Notes.
+      </p>
+
+      <div
+        role="tablist"
+        aria-label="Note source type"
+        className="tabs tabs-box tabs-sm mb-3 w-full"
+      >
+        {KINDS.map((k) => (
+          <button
+            key={k.id}
+            type="button"
+            role="tab"
+            aria-selected={kind === k.id}
+            onClick={() => setKind(k.id)}
+            className={`tab flex-1 font-medium ${
+              kind === k.id ? "tab-active" : ""
+            }`}
+          >
+            {k.label}
+          </button>
+        ))}
       </div>
 
       {needsRecorder && (
-        <div className="row">
-          <label className="meta inline-flex cursor-pointer items-center gap-3">
+        <div className="orbit-row border-b border-base-300 pb-3 pt-1">
+          <label className="meta inline-flex cursor-pointer items-center gap-2.5">
             <input
               type="checkbox"
               checked={consent}
               onChange={(e) => setConsent(e.target.checked)}
+              className="checkbox checkbox-sm checkbox-primary"
             />
             <span>Everyone present agrees to be recorded</span>
           </label>
-          <div className="row-actions">
+          <div className="orbit-row-actions">
             {!recording ? (
-              <button type="button" onClick={start} className="button button-secondary">
+              <button
+                type="button"
+                onClick={() => void start()}
+                className="btn btn-secondary btn-sm"
+              >
                 <Mic className="h-4 w-4" aria-hidden="true" />
                 <span>Record</span>
               </button>
@@ -209,7 +246,7 @@ export function MemoryCaptureStudio() {
                 <button
                   type="button"
                   onClick={togglePause}
-                  className="button button-secondary"
+                  className="btn btn-secondary btn-sm"
                 >
                   {paused ? (
                     <Play className="h-4 w-4" aria-hidden="true" />
@@ -218,7 +255,11 @@ export function MemoryCaptureStudio() {
                   )}
                   <span>{paused ? "Resume" : "Pause"}</span>
                 </button>
-                <button type="button" onClick={stop} className="button button-primary">
+                <button
+                  type="button"
+                  onClick={stop}
+                  className="btn btn-primary btn-sm"
+                >
                   <Square className="h-4 w-4" aria-hidden="true" />
                   <span>Stop</span>
                 </button>
@@ -236,18 +277,16 @@ export function MemoryCaptureStudio() {
 
       <form
         action={async (formData) => {
-          setBusy(true);
-          try {
-            await captureMemoryInboxAction(formData);
-            setText("");
-            setTitle("");
-            setSource("");
-            setSeconds(0);
-          } finally {
-            setBusy(false);
-          }
+          if (recording) stop();
+          await captureMemoryInboxAction(formData);
+          setText("");
+          setTitle("");
+          setSource("");
+          setSeconds(0);
+          onSuccess();
+          notify("Note saved");
         }}
-        className="mt-3 space-y-3"
+        className="mt-2 space-y-3"
       >
         <input type="hidden" name="captureKind" value={kind} />
         <input
@@ -261,57 +300,251 @@ export function MemoryCaptureStudio() {
           value={String(needsRecorder ? consent : true)}
         />
 
-        <div>
-          <label htmlFor="cap-text" className="label">
-            Text
+        <fieldset className="fieldset">
+          <label htmlFor={`${idBase}-text`} className="fieldset-legend">
+            Note or transcript
           </label>
           <textarea
-            id="cap-text"
+            ref={resolvedTextareaRef}
+            id={`${idBase}-text`}
             name="rawContent"
+            rows={4}
             required
             value={text}
             onChange={(e) => setText(e.target.value)}
-            className="field"
+            placeholder="Paste meeting notes, a message, or thoughts to sort later"
+            className="textarea w-full"
           />
-        </div>
+        </fieldset>
 
-        <div className="grid gap-3 sm:grid-cols-2">
-          <div>
-            <label htmlFor="cap-title" className="label">
-              Title (optional)
-            </label>
-            <input
-              id="cap-title"
-              name="title"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              className="field"
-            />
+        <details className="rounded-xl border border-base-300 bg-base-200/50 px-3.5 py-2.5">
+          <summary className="cursor-pointer text-[0.9375rem] font-medium text-[var(--text-2)]">
+            Add title or speaker context (optional)
+          </summary>
+          <div className="mt-3 grid gap-3 sm:grid-cols-2">
+            <fieldset className="fieldset">
+              <label htmlFor={`${idBase}-title`} className="fieldset-legend">
+                Title
+              </label>
+              <input
+                id={`${idBase}-title`}
+                name="title"
+                type="text"
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                className="input w-full"
+              />
+            </fieldset>
+            <fieldset className="fieldset">
+              <label htmlFor={`${idBase}-source`} className="fieldset-legend">
+                Who or what
+              </label>
+              <input
+                id={`${idBase}-source`}
+                name="speakerContext"
+                type="text"
+                value={source}
+                onChange={(e) => setSource(e.target.value)}
+                className="input w-full"
+              />
+            </fieldset>
           </div>
-          <div>
-            <label htmlFor="cap-source" className="label">
-              Who or what (optional)
-            </label>
-            <input
-              id="cap-source"
-              name="speakerContext"
-              value={source}
-              onChange={(e) => setSource(e.target.value)}
-              className="field"
-            />
-          </div>
-        </div>
+        </details>
 
-        <div className="flex justify-end">
+        <div className="modal-action">
           <button
-            type="submit"
-            disabled={busy || !text.trim()}
-            className="button button-primary"
+            type="button"
+            onClick={() => {
+              if (recording) stop();
+              onCancel();
+            }}
+            className="btn btn-ghost"
           >
-            {busy ? "Analysing" : "Capture"}
+            Cancel
           </button>
+          <SubmitButton pendingLabel="Saving" disabled={!text.trim()}>
+            Save note
+          </SubmitButton>
         </div>
       </form>
-    </section>
+    </div>
+  );
+}
+
+export function MemoryCaptureModal({
+  triggerLabel = "New note",
+  triggerClassName = "btn btn-primary btn-sm sm:btn-md",
+}: {
+  triggerLabel?: string;
+  triggerClassName?: string;
+}) {
+  const dialogRef = useRef<HTMLDialogElement | null>(null);
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+
+  function open() {
+    const dialog = dialogRef.current;
+    if (!dialog || dialog.open) return;
+    dialog.showModal();
+    setTimeout(() => textareaRef.current?.focus(), 20);
+  }
+
+  function close() {
+    dialogRef.current?.close();
+  }
+
+  return (
+    <>
+      <button type="button" onClick={open} className={triggerClassName}>
+        <Plus className="h-4 w-4" aria-hidden="true" />
+        <span>{triggerLabel}</span>
+      </button>
+
+      <OrbitModal
+        dialogRef={dialogRef}
+        title="New note"
+        maxWidthClass="sm:max-w-xl"
+      >
+        <MemoryCaptureForm
+          textareaRef={textareaRef}
+          onSuccess={close}
+          onCancel={close}
+        />
+      </OrbitModal>
+    </>
+  );
+}
+
+export function EditExtractedActionModal({
+  item,
+  lifeAreas,
+}: {
+  item: {
+    id: string;
+    title: string;
+    lifeAreaId: string | null;
+    classification: string;
+    waitingOnTarget: string | null;
+    suggestedCommitment: string;
+  };
+  lifeAreas: { id: string; name: string }[];
+}) {
+  const idBase = useId();
+  const dialogRef = useRef<HTMLDialogElement | null>(null);
+  const titleRef = useRef<HTMLInputElement | null>(null);
+  const { notify } = useOrbitToast();
+
+  const initialCommitment =
+    item.classification === "FOLLOW_UP" && item.waitingOnTarget
+      ? "WAITING"
+      : item.suggestedCommitment || "FLEXIBLE";
+
+  const [commitment, setCommitment] = useState<string>(initialCommitment);
+
+  function open() {
+    const dialog = dialogRef.current;
+    if (!dialog || dialog.open) return;
+    setCommitment(initialCommitment);
+    dialog.showModal();
+    setTimeout(() => titleRef.current?.focus(), 20);
+  }
+
+  function close() {
+    dialogRef.current?.close();
+  }
+
+  return (
+    <>
+      <button
+        type="button"
+        onClick={open}
+        aria-label={`Edit ${item.title}`}
+        className="btn btn-ghost btn-sm"
+      >
+        <Pencil className="h-3.5 w-3.5" aria-hidden="true" />
+        <span>Edit</span>
+      </button>
+
+      <OrbitModal
+        dialogRef={dialogRef}
+        title="Edit extracted task"
+        maxWidthClass="sm:max-w-md"
+      >
+        <form
+          action={async (formData) => {
+            await resolveExtractedActionAction(formData);
+            close();
+            notify("Approved and added to tasks");
+          }}
+          className="space-y-3"
+        >
+          <input type="hidden" name="extractedActionId" value={item.id} />
+          <input type="hidden" name="decision" value="APPROVE" />
+
+          <fieldset className="fieldset">
+            <label htmlFor={`${idBase}-title`} className="fieldset-legend">
+              Title
+            </label>
+            <input
+              ref={titleRef}
+              id={`${idBase}-title`}
+              name="overrideTitle"
+              type="text"
+              required
+              defaultValue={item.title}
+              className="input w-full"
+            />
+          </fieldset>
+
+          <fieldset className="fieldset">
+            <label htmlFor={`${idBase}-area`} className="fieldset-legend">
+              Area
+            </label>
+            <select
+              id={`${idBase}-area`}
+              name="overrideLifeAreaId"
+              defaultValue={item.lifeAreaId ?? lifeAreas[0]?.id ?? ""}
+              className="select w-full"
+            >
+              {lifeAreas.map((a) => (
+                <option key={a.id} value={a.id}>
+                  {a.name}
+                </option>
+              ))}
+            </select>
+          </fieldset>
+
+          <fieldset className="fieldset">
+            <legend className="fieldset-legend">Type</legend>
+            <div className="tabs tabs-box w-full">
+              {(
+                [
+                  ["FLEXIBLE", "Flexible"],
+                  ["WAITING", "Waiting"],
+                  ["SCHEDULED", "Scheduled"],
+                ] as const
+              ).map(([val, label]) => (
+                <label key={val} className="tab flex-1 font-medium">
+                  <input
+                    type="radio"
+                    name="overrideCommitmentType"
+                    value={val}
+                    checked={commitment === val}
+                    onChange={() => setCommitment(val)}
+                  />
+                  {label}
+                </label>
+              ))}
+            </div>
+          </fieldset>
+
+          <div className="modal-action">
+            <button type="button" onClick={close} className="btn btn-ghost">
+              Cancel
+            </button>
+            <SubmitButton pendingLabel="Saving">Save and approve</SubmitButton>
+          </div>
+        </form>
+      </OrbitModal>
+    </>
   );
 }

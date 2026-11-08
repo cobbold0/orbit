@@ -1,4 +1,4 @@
-import { ActivitySource, RoutineState } from "@prisma/client";
+import { ActivitySource, RoutineKind, RoutineState } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
 
 export async function getActivityAndRoutinesData(userId: string) {
@@ -181,6 +181,34 @@ export async function resolveSuggestedRoutine(
     where: { id: routine.id },
     data: {
       state: RoutineState.DECLARED,
+    },
+  });
+}
+
+export async function createDeclaredRoutine(
+  userId: string,
+  input: {
+    title: string;
+    lifeAreaId?: string | null;
+    kind?: RoutineKind;
+    daysOfWeek: number[];
+    startTimeLocal: string;
+    endTimeLocal: string;
+    physicalLocation?: string | null;
+  }
+) {
+  return prisma.routine.create({
+    data: {
+      userId,
+      lifeAreaId: input.lifeAreaId || null,
+      title: input.title.trim(),
+      kind: input.kind ?? RoutineKind.WORK_BLOCK,
+      state: RoutineState.DECLARED,
+      daysOfWeek: input.daysOfWeek.length > 0 ? input.daysOfWeek : [1, 2, 3, 4, 5],
+      startTimeLocal: input.startTimeLocal,
+      endTimeLocal: input.endTimeLocal,
+      physicalLocation: input.physicalLocation?.trim() || null,
+      isActive: true,
     },
   });
 }

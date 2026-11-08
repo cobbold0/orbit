@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from "next";
+import { OrbitToastProvider } from "@/components/ui/orbit-toast";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -29,8 +30,10 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
-      <body className="min-h-dvh">{children}</body>
+    <html lang="en" data-theme="orbit">
+      <body className="min-h-dvh">
+        <OrbitToastProvider>{children}</OrbitToastProvider>
+      </body>
     </html>
   );
 }

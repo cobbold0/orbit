@@ -1,22 +1,32 @@
 "use client";
 
-import React, { useEffect, useRef, useState } from "react";
+import React, {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useId,
+  useRef,
+  useState,
+} from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   CalendarCheck,
   CalendarRange,
+  FileText,
   History,
-  Inbox,
   Layers,
   Plus,
-  X,
 } from "lucide-react";
 import {
   createStructuredTaskAction,
+  logActivityCheckInAction,
   quickCaptureAction,
 } from "@/app/actions/orbit-actions";
-import { AreaDot } from "@/components/ui/page";
+import { MemoryCaptureForm } from "@/components/inbox/memory-capture-studio";
+import { OrbitModal, SubmitButton } from "@/components/ui/orbit-modal";
+import { useOrbitToast } from "@/components/ui/orbit-toast";
 
 export interface ShellLifeArea {
   id: string;
@@ -31,6 +41,49 @@ export interface ShellProject {
   lifeAreaId: string;
 }
 
+export type CaptureTabMode = "task" | "note" | "log";
+
+interface OpenCaptureOptions {
+  defaultAreaId?: string;
+  mode?: CaptureTabMode | "quick" | "detailed";
+}
+
+interface OrbitCaptureContextValue {
+  openCapture: (options?: OpenCaptureOptions) => void;
+}
+
+const OrbitCaptureContext = createContext<OrbitCaptureContextValue>({
+  openCapture: () => {},
+});
+
+export function useOrbitCapture() {
+  return useContext(OrbitCaptureContext);
+}
+
+export function OpenCaptureButton({
+  defaultAreaId,
+  mode = "task",
+  label = "New task",
+  className = "btn btn-secondary",
+}: {
+  defaultAreaId?: string;
+  mode?: CaptureTabMode | "quick" | "detailed";
+  label?: string;
+  className?: string;
+}) {
+  const { openCapture } = useOrbitCapture();
+  return (
+    <button
+      type="button"
+      onClick={() => openCapture({ defaultAreaId, mode })}
+      className={className}
+    >
+      <Plus className="h-4 w-4" aria-hidden="true" />
+      <span>{label}</span>
+    </button>
+  );
+}
+
 interface OrbitShellProps {
   children: React.ReactNode;
   lifeAreas: ShellLifeArea[];
@@ -43,7 +96,7 @@ const NAV_ITEMS = [
   { href: "/timeline", label: "Timeline", icon: CalendarRange },
   { href: "/areas", label: "Areas", icon: Layers },
   { href: "/routines", label: "Activity", icon: History },
-  { href: "/inbox", label: "Inbox", icon: Inbox },
+  { href: "/inbox", label: "Notes", icon: FileText },
 ];
 
 type CommitmentChoice = "FLEXIBLE" | "SCHEDULED" | "WAITING";
@@ -55,72 +108,58 @@ export function OrbitShell({
   unreviewedInboxCount = 0,
 }: OrbitShellProps) {
   const pathname = usePathname();
+  const idBase = useId();
   const dialogRef = useRef<HTMLDialogElement | null>(null);
-  const quickInputRef = useRef<HTMLInputElement | null>(null);
-  const [mode, setMode] = useState<"quick" | "detailed">("quick");
+  const taskInputRef = useRef<HTMLInputElement | null>(null);
+  const noteTextareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const logTitleRef = useRef<HTMLInputElement | null>(null);
+  const taskFormRef = useRef<HTMLFormElement | null>(null);
+  const logFormRef = useRef<HTMLFormElement | null>(null);
+  const { notify } = useOrbitToast();
+
+  const [tab, setTab] = useState<CaptureTabMode>("task");
+  const [showMoreTaskOptions, setShowMoreTaskOptions] = useState(false);
   const [commitment, setCommitment] = useState<CommitmentChoice>("FLEXIBLE");
-  const [areaId, setAreaId] = useState<string>(lifeAreas[0]?.id ?? "");
+  const [areaId, setAreaId] = useState<string>("");
 
-  // Light dismiss fallback for browsers without <dialog closedby>
-  useEffect(() => {
-    const dialog = dialogRef.current;
-    if (!dialog || "closedBy" in HTMLDialogElement.prototype) return;
-    const outside = (event: PointerEvent) => {
-      const r = dialog.getBoundingClientRect();
-      return (
-        event.clientX < r.left ||
-        event.clientX > r.right ||
-        event.clientY < r.top ||
-        event.clientY > r.bottom
-      );
-    };
-    let pressedOutside = false;
-    const onDown = (event: PointerEvent) => {
-      if (event.target === dialog) pressedOutside = outside(event);
-      else pressedOutside = false;
-    };
-    const onUp = (event: PointerEvent) => {
-      if (pressedOutside && event.target === dialog && outside(event)) {
-        dialog.close();
+  const openCapture = useCallback(
+    (options?: OpenCaptureOptions) => {
+      const dialog = dialogRef.current;
+      if (!dialog) return;
+
+      const requested = options?.mode ?? "task";
+      const nextTab: CaptureTabMode =
+        requested === "note" ? "note" : requested === "log" ? "log" : "task";
+      setTab(nextTab);
+      setShowMoreTaskOptions(requested === "detailed");
+
+      if (options?.defaultAreaId) {
+        setAreaId(options.defaultAreaId);
+      } else {
+        setAreaId("");
       }
-      pressedOutside = false;
-    };
-    dialog.addEventListener("pointerdown", onDown);
-    dialog.addEventListener("pointerup", onUp);
-    return () => {
-      dialog.removeEventListener("pointerdown", onDown);
-      dialog.removeEventListener("pointerup", onUp);
-    };
-  }, []);
 
-  // Close open dropdown menus on outside click, Escape, or after choosing an item
-  useEffect(() => {
-    const closeAll = (except?: Node | null) => {
-      document
-        .querySelectorAll<HTMLDetailsElement>("details.menu-wrap[open]")
-        .forEach((d) => {
-          if (!except || !d.contains(except)) d.removeAttribute("open");
-        });
-    };
-    const onClick = (e: MouseEvent) => {
-      const target = e.target as Element | null;
-      closeAll(target);
-      if (target?.closest(".panel") && target.closest("button[type=submit]")) {
-        setTimeout(() => closeAll(), 0);
+      if (!dialog.open) {
+        dialog.showModal();
       }
-    };
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") closeAll();
-    };
-    document.addEventListener("click", onClick);
-    document.addEventListener("keydown", onKey);
-    return () => {
-      document.removeEventListener("click", onClick);
-      document.removeEventListener("keydown", onKey);
-    };
-  }, []);
+      setTimeout(() => {
+        if (nextTab === "task") {
+          taskInputRef.current?.focus();
+        } else if (nextTab === "note") {
+          noteTextareaRef.current?.focus();
+        } else {
+          logTitleRef.current?.focus();
+        }
+      }, 20);
+    },
+    []
+  );
 
-  // Cmd/Ctrl + K opens capture
+  function closeCapture() {
+    dialogRef.current?.close();
+  }
+
+  // Cmd/Ctrl + K opens Capture
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
@@ -130,204 +169,206 @@ export function OrbitShell({
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, []);
-
-  function openCapture() {
-    const dialog = dialogRef.current;
-    if (dialog && !dialog.open) {
-      setMode("quick");
-      dialog.showModal();
-      setTimeout(() => quickInputRef.current?.focus(), 20);
-    }
-  }
-
-  function closeCapture() {
-    dialogRef.current?.close();
-  }
+  }, [openCapture]);
 
   const isActive = (href: string) =>
-    href === "/" ? pathname === "/" : pathname.startsWith(href);
+    href === "/"
+      ? pathname === "/"
+      : pathname === href || pathname.startsWith(`${href}/`);
 
-  const areaProjects = projects.filter((p) => p.lifeAreaId === areaId);
+  const effectiveStructuredAreaId = areaId || lifeAreas[0]?.id || "";
+  const areaProjects = projects.filter(
+    (p) => p.lifeAreaId === effectiveStructuredAreaId
+  );
 
   return (
-    <div className="min-h-dvh md:flex">
-      <a
-        href="#main-content"
-        className="visually-hidden focus:fixed focus:left-3 focus:top-3 focus:z-50 focus:rounded-lg focus:bg-white focus:px-4 focus:py-2 focus:shadow-lg"
-      >
-        Skip to main content
-      </a>
-
-      {/* Desktop sidebar */}
-      <aside className="hidden md:sticky md:top-0 md:flex md:h-dvh md:w-64 md:shrink-0 md:flex-col md:px-4 md:py-6">
-        <Link href="/" className="px-3 text-xl font-bold tracking-tight">
-          Orbit
-        </Link>
-
-        <button
-          type="button"
-          onClick={openCapture}
-          className="button button-primary mt-6 w-full"
+    <OrbitCaptureContext.Provider value={{ openCapture }}>
+      <div className="min-h-dvh md:flex">
+        <a
+          href="#main-content"
+          className="visually-hidden focus:fixed focus:start-3 focus:top-3 focus:z-50 focus:rounded-lg focus:bg-base-100 focus:px-4 focus:py-2 focus:shadow-lg"
         >
-          <Plus className="h-4 w-4" aria-hidden="true" />
-          <span>Capture</span>
-        </button>
+          Skip to main content
+        </a>
 
-        <nav aria-label="Primary" className="mt-6">
-          <ul className="space-y-1">
-            {NAV_ITEMS.map((item) => {
-              const Icon = item.icon;
-              return (
-                <li key={item.href}>
-                  <Link
-                    href={item.href}
-                    className="nav-link"
-                    aria-current={isActive(item.href) ? "page" : undefined}
-                  >
-                    <Icon className="h-5 w-5 shrink-0" aria-hidden="true" />
-                    <span>{item.label}</span>
-                    {item.href === "/inbox" && unreviewedInboxCount > 0 && (
-                      <span
-                        className="count-badge tabular"
-                        aria-label={`${unreviewedInboxCount} to review`}
-                      >
-                        {unreviewedInboxCount}
-                      </span>
-                    )}
-                  </Link>
-                </li>
-              );
-            })}
-          </ul>
-        </nav>
-
-        <nav aria-label="Areas" className="mt-8 min-h-0 flex-1 overflow-y-auto">
-          <p className="meta-soft mb-1 px-3 font-medium">Areas</p>
-          <ul className="space-y-1">
-            {lifeAreas.map((area) => (
-              <li key={area.id}>
-                <Link
-                  href={`/areas?area=${area.slug}`}
-                  className="nav-link"
-                >
-                  <AreaDot token={area.colorToken} />
-                  <span className="truncate">{area.name}</span>
-                </Link>
-              </li>
-            ))}
-          </ul>
-        </nav>
-      </aside>
-
-      <div className="flex min-w-0 flex-1 flex-col">
-        {/* Mobile top bar */}
-        <header className="mobile-bar md:hidden">
-          <Link href="/" className="text-lg font-bold tracking-tight">
+        {/* Desktop sidebar: 5 primary destinations */}
+        <aside className="hidden md:sticky md:top-0 md:flex md:h-dvh md:w-60 md:shrink-0 md:flex-col md:border-r md:border-base-300/70 md:px-4 md:py-6">
+          <Link href="/" className="px-3 text-xl font-bold tracking-tight">
             Orbit
           </Link>
+
           <button
             type="button"
-            onClick={openCapture}
-            className="button button-primary min-h-9 px-3.5"
+            onClick={() => openCapture()}
+            className="btn btn-primary btn-block mt-6"
           >
             <Plus className="h-4 w-4" aria-hidden="true" />
             <span>Capture</span>
           </button>
-        </header>
 
-        <main
-          id="main-content"
-          tabIndex={-1}
-          className="mx-auto w-full max-w-5xl min-w-0 flex-1 px-4 pb-24 pt-5 outline-none sm:px-8 md:pb-16 md:pt-10"
-        >
-          {children}
-        </main>
-      </div>
+          <nav aria-label="Primary" className="mt-6">
+            <ul className="menu flex-nowrap w-full gap-1 p-0 text-[0.9375rem]">
+              {NAV_ITEMS.map((item) => {
+                const Icon = item.icon;
+                const active = isActive(item.href);
+                return (
+                  <li key={item.href}>
+                    <Link
+                      href={item.href}
+                      aria-current={active ? "page" : undefined}
+                      className={`py-2.5 font-medium ${active ? "menu-active" : ""}`}
+                    >
+                      <Icon className="h-5 w-5 shrink-0" aria-hidden="true" />
+                      <span>{item.label}</span>
+                      {item.href === "/inbox" && unreviewedInboxCount > 0 && (
+                        <span
+                          className={`badge badge-sm tabular ${
+                            active ? "badge-secondary" : "badge-neutral"
+                          }`}
+                          aria-label={`${unreviewedInboxCount} tasks to review`}
+                        >
+                          {unreviewedInboxCount}
+                        </span>
+                      )}
+                    </Link>
+                  </li>
+                );
+              })}
+            </ul>
+          </nav>
+        </aside>
 
-      {/* Mobile bottom navigation */}
-      <nav aria-label="Primary" className="tabbar md:hidden">
-        <ul className="grid grid-cols-5">
-          {NAV_ITEMS.map((item) => {
-            const Icon = item.icon;
-            return (
-              <li key={item.href}>
-                <Link
-                  href={item.href}
-                  className="tab"
-                  aria-current={isActive(item.href) ? "page" : undefined}
-                >
-                  <Icon className="h-6 w-6" aria-hidden="true" />
-                  <span>{item.label}</span>
-                  {item.href === "/inbox" && unreviewedInboxCount > 0 && (
-                    <span className="dot-badge tabular">
-                      {unreviewedInboxCount}
-                    </span>
-                  )}
-                </Link>
-              </li>
-            );
-          })}
-        </ul>
-      </nav>
-
-      {/* Capture sheet */}
-      <dialog
-        ref={dialogRef}
-        className="sheet"
-        {...({ closedby: "any" } as React.DialogHTMLAttributes<HTMLDialogElement>)}
-        aria-labelledby="capture-title"
-      >
-        <div className="p-5 sm:p-6">
-          <div className="flex items-center justify-between gap-3">
-            <h2 id="capture-title" className="h2">
-              Capture
-            </h2>
-            <div className="flex items-center gap-2">
-              <div className="segmented" role="group" aria-label="Capture mode">
-                {(
-                  [
-                    ["quick", "Quick"],
-                    ["detailed", "Detailed"],
-                  ] as const
-                ).map(([value, label]) => (
-                  <button
-                    key={value}
-                    type="button"
-                    className="segmented-item"
-                    aria-pressed={mode === value}
-                    onClick={() => setMode(value)}
-                  >
-                    {label}
-                  </button>
-                ))}
-              </div>
+        <div className="flex min-w-0 flex-1 flex-col">
+          {/* Mobile top navbar */}
+          <header className="navbar sticky top-0 z-20 min-h-14 border-b border-base-300/70 bg-base-100/95 px-4 backdrop-blur md:hidden">
+            <div className="navbar-start">
+              <Link href="/" className="text-lg font-bold tracking-tight">
+                Orbit
+              </Link>
+            </div>
+            <div className="navbar-end">
               <button
                 type="button"
-                onClick={closeCapture}
-                aria-label="Close"
-                className="button button-ghost button-icon"
+                onClick={() => openCapture()}
+                className="btn btn-primary btn-sm"
               >
-                <X className="h-5 w-5" aria-hidden="true" />
+                <Plus className="h-4 w-4" aria-hidden="true" />
+                <span>Capture</span>
               </button>
             </div>
+          </header>
+
+          <main
+            id="main-content"
+            tabIndex={-1}
+            className="mx-auto w-full max-w-5xl min-w-0 flex-1 px-4 pb-24 pt-5 outline-none sm:px-8 md:pb-16 md:pt-10"
+          >
+            {children}
+          </main>
+        </div>
+
+        {/* Mobile bottom DaisyUI dock */}
+        <nav
+          aria-label="Mobile primary"
+          className="dock dock-md z-30 border-t border-base-300/80 bg-base-100/95 backdrop-blur md:hidden"
+        >
+          {NAV_ITEMS.map((item) => {
+            const Icon = item.icon;
+            const active = isActive(item.href);
+            const hasBadge =
+              item.href === "/inbox" && unreviewedInboxCount > 0;
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                aria-current={active ? "page" : undefined}
+                className={active ? "dock-active" : ""}
+              >
+                {hasBadge ? (
+                  <span className="indicator">
+                    <span className="indicator-item badge badge-neutral badge-xs tabular">
+                      {unreviewedInboxCount}
+                    </span>
+                    <Icon className="h-5 w-5" aria-hidden="true" />
+                  </span>
+                ) : (
+                  <Icon className="h-5 w-5" aria-hidden="true" />
+                )}
+                <span className="dock-label">{item.label}</span>
+              </Link>
+            );
+          })}
+        </nav>
+
+        {/* Unified Capture Modal: Task (to do) | Note (brain dump / voice) | Log work (done) */}
+        <OrbitModal
+          dialogRef={dialogRef}
+          title="Capture"
+          maxWidthClass="sm:max-w-lg"
+        >
+          <div
+            role="tablist"
+            aria-label="What are you capturing?"
+            className="tabs tabs-box tabs-sm mb-3 w-full"
+          >
+            {(
+              [
+                ["task", "Task"],
+                ["note", "Note"],
+                ["log", "Log work"],
+              ] as const
+            ).map(([value, label]) => (
+              <button
+                key={value}
+                type="button"
+                role="tab"
+                aria-selected={tab === value}
+                onClick={() => setTab(value)}
+                className={`tab flex-1 font-medium ${
+                  tab === value ? "tab-active" : ""
+                }`}
+              >
+                {label}
+              </button>
+            ))}
           </div>
 
-          {mode === "quick" ? (
+          {tab === "task" && (
             <form
+              ref={taskFormRef}
               action={async (formData) => {
-                await quickCaptureAction(formData);
+                if (showMoreTaskOptions) {
+                  const raw = String(formData.get("rawInput") ?? "").trim();
+                  formData.set("title", raw);
+                  if (!formData.get("lifeAreaId") && effectiveStructuredAreaId) {
+                    formData.set("lifeAreaId", effectiveStructuredAreaId);
+                  }
+                  await createStructuredTaskAction(formData);
+                } else {
+                  await quickCaptureAction(formData);
+                }
+                taskFormRef.current?.reset();
+                setShowMoreTaskOptions(false);
                 closeCapture();
+                notify("Task added");
               }}
-              className="mt-5 space-y-4"
+              className="space-y-3"
             >
-              <div>
-                <label htmlFor="quick-input" className="label">
-                  Task or reminder
+              <p className="meta">
+                Something you need to do. Type naturally or add scheduling
+                details below.
+              </p>
+
+              <fieldset className="fieldset">
+                <label
+                  htmlFor={`${idBase}-task-input`}
+                  className="fieldset-legend"
+                >
+                  Task
                 </label>
                 <input
-                  ref={quickInputRef}
-                  id="quick-input"
+                  ref={taskInputRef}
+                  id={`${idBase}-task-input`}
                   name="rawInput"
                   type="text"
                   required
@@ -338,73 +379,310 @@ export function OrbitShell({
                       e.preventDefault();
                     }
                   }}
-                  className="field"
+                  className="input w-full"
                 />
-              </div>
-              <div>
-                <label htmlFor="quick-area" className="label">
+              </fieldset>
+
+              <fieldset className="fieldset">
+                <label
+                  htmlFor={`${idBase}-task-area`}
+                  className="fieldset-legend"
+                >
                   Area
                 </label>
                 <select
-                  id="quick-area"
+                  id={`${idBase}-task-area`}
                   name="lifeAreaId"
-                  defaultValue=""
-                  className="field"
+                  value={areaId}
+                  onChange={(e) => setAreaId(e.target.value)}
+                  className="select w-full"
                 >
-                  <option value="">Detect automatically</option>
+                  {!showMoreTaskOptions && (
+                    <option value="">Detect automatically</option>
+                  )}
                   {lifeAreas.map((a) => (
                     <option key={a.id} value={a.id}>
                       {a.name}
                     </option>
                   ))}
                 </select>
-              </div>
-              <div className="flex justify-end gap-2 pt-1">
+              </fieldset>
+
+              <details
+                open={showMoreTaskOptions}
+                onToggle={(e) =>
+                  setShowMoreTaskOptions(
+                    (e.currentTarget as HTMLDetailsElement).open
+                  )
+                }
+                className="rounded-xl border border-base-300 bg-base-200/50 px-3.5 py-2.5"
+              >
+                <summary className="cursor-pointer text-[0.9375rem] font-medium text-[var(--text-2)]">
+                  Schedule, project, or priority
+                </summary>
+
+                <div className="mt-3 space-y-3">
+                  <fieldset className="fieldset">
+                    <label
+                      htmlFor={`${idBase}-d-project`}
+                      className="fieldset-legend"
+                    >
+                      Project
+                    </label>
+                    <select
+                      id={`${idBase}-d-project`}
+                      name="projectId"
+                      defaultValue=""
+                      className="select w-full"
+                    >
+                      <option value="">None</option>
+                      {areaProjects.map((p) => (
+                        <option key={p.id} value={p.id}>
+                          {p.title}
+                        </option>
+                      ))}
+                    </select>
+                  </fieldset>
+
+                  <fieldset className="fieldset">
+                    <legend className="fieldset-legend">Type</legend>
+                    <div className="tabs tabs-box w-full">
+                      {(
+                        [
+                          ["FLEXIBLE", "Flexible"],
+                          ["SCHEDULED", "Scheduled"],
+                          ["WAITING", "Waiting"],
+                        ] as const
+                      ).map(([value, label]) => (
+                        <label key={value} className="tab flex-1 font-medium">
+                          <input
+                            type="radio"
+                            name="commitmentType"
+                            value={value}
+                            checked={commitment === value}
+                            onChange={() => setCommitment(value)}
+                          />
+                          {label}
+                        </label>
+                      ))}
+                    </div>
+                  </fieldset>
+
+                  {commitment === "SCHEDULED" && (
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <fieldset className="fieldset">
+                        <label
+                          htmlFor={`${idBase}-d-date`}
+                          className="fieldset-legend"
+                        >
+                          Date
+                        </label>
+                        <input
+                          id={`${idBase}-d-date`}
+                          name="scheduledDate"
+                          type="date"
+                          required={showMoreTaskOptions}
+                          className="input w-full"
+                        />
+                      </fieldset>
+                      <fieldset className="fieldset">
+                        <label
+                          htmlFor={`${idBase}-d-time`}
+                          className="fieldset-legend"
+                        >
+                          Start time
+                        </label>
+                        <input
+                          id={`${idBase}-d-time`}
+                          name="scheduledTime"
+                          type="time"
+                          required={showMoreTaskOptions}
+                          defaultValue="14:00"
+                          className="input w-full"
+                        />
+                      </fieldset>
+                    </div>
+                  )}
+
+                  {commitment === "FLEXIBLE" && (
+                    <fieldset className="fieldset">
+                      <label
+                        htmlFor={`${idBase}-d-window`}
+                        className="fieldset-legend"
+                      >
+                        When
+                      </label>
+                      <select
+                        id={`${idBase}-d-window`}
+                        name="flexibilityWindow"
+                        defaultValue="THIS_WEEK"
+                        className="select w-full"
+                      >
+                        <option value="THIS_MORNING">This morning</option>
+                        <option value="THIS_AFTERNOON">This afternoon</option>
+                        <option value="THIS_EVENING">This evening</option>
+                        <option value="THIS_WEEK">This week</option>
+                        <option value="WEEKEND">Weekend</option>
+                      </select>
+                    </fieldset>
+                  )}
+
+                  {commitment === "WAITING" && (
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <fieldset className="fieldset">
+                        <label
+                          htmlFor={`${idBase}-d-who`}
+                          className="fieldset-legend"
+                        >
+                          Waiting on
+                        </label>
+                        <input
+                          id={`${idBase}-d-who`}
+                          name="waitingOnPerson"
+                          type="text"
+                          className="input w-full"
+                        />
+                      </fieldset>
+                      <fieldset className="fieldset">
+                        <label
+                          htmlFor={`${idBase}-d-what`}
+                          className="fieldset-legend"
+                        >
+                          For
+                        </label>
+                        <input
+                          id={`${idBase}-d-what`}
+                          name="waitingOnCondition"
+                          type="text"
+                          className="input w-full"
+                        />
+                      </fieldset>
+                    </div>
+                  )}
+
+                  <div className="grid gap-3 sm:grid-cols-3">
+                    <fieldset className="fieldset">
+                      <label
+                        htmlFor={`${idBase}-d-duration`}
+                        className="fieldset-legend"
+                      >
+                        Minutes
+                      </label>
+                      <input
+                        id={`${idBase}-d-duration`}
+                        name="estimatedMinutes"
+                        type="text"
+                        inputMode="numeric"
+                        defaultValue="45"
+                        className="input w-full"
+                      />
+                    </fieldset>
+                    <fieldset className="fieldset">
+                      <label
+                        htmlFor={`${idBase}-d-due`}
+                        className="fieldset-legend"
+                      >
+                        Due date
+                      </label>
+                      <input
+                        id={`${idBase}-d-due`}
+                        name="dueDate"
+                        type="date"
+                        className="input w-full"
+                      />
+                    </fieldset>
+                    <fieldset className="fieldset">
+                      <label
+                        htmlFor={`${idBase}-d-priority`}
+                        className="fieldset-legend"
+                      >
+                        Priority
+                      </label>
+                      <select
+                        id={`${idBase}-d-priority`}
+                        name="priority"
+                        defaultValue="NORMAL"
+                        className="select w-full"
+                      >
+                        <option value="LOW">Low</option>
+                        <option value="NORMAL">Normal</option>
+                        <option value="HIGH">High</option>
+                        <option value="CRITICAL">Critical</option>
+                      </select>
+                    </fieldset>
+                  </div>
+                </div>
+              </details>
+
+              <div className="modal-action">
                 <button
                   type="button"
                   onClick={closeCapture}
-                  className="button button-ghost"
+                  className="btn btn-ghost"
                 >
                   Cancel
                 </button>
-                <button type="submit" className="button button-primary">
-                  Add
-                </button>
+                <SubmitButton pendingLabel="Adding">Add task</SubmitButton>
               </div>
             </form>
-          ) : (
+          )}
+
+          {tab === "note" && (
+            <MemoryCaptureForm
+              textareaRef={noteTextareaRef}
+              onSuccess={closeCapture}
+              onCancel={closeCapture}
+            />
+          )}
+
+          {tab === "log" && (
             <form
+              ref={logFormRef}
               action={async (formData) => {
-                await createStructuredTaskAction(formData);
+                await logActivityCheckInAction(formData);
+                logFormRef.current?.reset();
                 closeCapture();
+                notify("Work logged");
               }}
-              className="mt-5 space-y-4"
+              className="space-y-3"
             >
-              <div>
-                <label htmlFor="d-title" className="label">
-                  Title
+              <p className="meta">
+                Record something you already spent time on. Saved directly to
+                your Activity work log.
+              </p>
+
+              <fieldset className="fieldset">
+                <label
+                  htmlFor={`${idBase}-log-title`}
+                  className="fieldset-legend"
+                >
+                  What did you work on?
                 </label>
                 <input
-                  id="d-title"
+                  ref={logTitleRef}
+                  id={`${idBase}-log-title`}
                   name="title"
                   type="text"
                   required
                   autoComplete="off"
-                  className="field"
+                  placeholder="Vocal warmups, Odoo sprint review"
+                  className="input w-full"
                 />
-              </div>
+              </fieldset>
 
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div>
-                  <label htmlFor="d-area" className="label">
+              <div className="grid gap-3 sm:grid-cols-2">
+                <fieldset className="fieldset">
+                  <label
+                    htmlFor={`${idBase}-log-area`}
+                    className="fieldset-legend"
+                  >
                     Area
                   </label>
                   <select
-                    id="d-area"
+                    id={`${idBase}-log-area`}
                     name="lifeAreaId"
-                    value={areaId}
-                    onChange={(e) => setAreaId(e.target.value)}
-                    className="field"
+                    defaultValue={areaId || lifeAreas[0]?.id || ""}
+                    className="select w-full"
                   >
                     {lifeAreas.map((a) => (
                       <option key={a.id} value={a.id}>
@@ -412,187 +690,57 @@ export function OrbitShell({
                       </option>
                     ))}
                   </select>
-                </div>
-                <div>
-                  <label htmlFor="d-project" className="label">
-                    Project
-                  </label>
-                  <select
-                    id="d-project"
-                    name="projectId"
-                    defaultValue=""
-                    className="field"
+                </fieldset>
+
+                <fieldset className="fieldset">
+                  <label
+                    htmlFor={`${idBase}-log-min`}
+                    className="fieldset-legend"
                   >
-                    <option value="">None</option>
-                    {areaProjects.map((p) => (
-                      <option key={p.id} value={p.id}>
-                        {p.title}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-
-              <fieldset>
-                <legend className="label">Type</legend>
-                <div className="segmented w-full">
-                  {(
-                    [
-                      ["FLEXIBLE", "Flexible"],
-                      ["SCHEDULED", "Scheduled"],
-                      ["WAITING", "Waiting"],
-                    ] as const
-                  ).map(([value, label]) => (
-                    <label
-                      key={value}
-                      className="segmented-item flex-1"
-                      aria-pressed={commitment === value}
-                    >
-                      <input
-                        type="radio"
-                        name="commitmentType"
-                        value={value}
-                        checked={commitment === value}
-                        onChange={() => setCommitment(value)}
-                        className="visually-hidden"
-                      />
-                      <span>{label}</span>
-                    </label>
-                  ))}
-                </div>
-              </fieldset>
-
-              {commitment === "SCHEDULED" && (
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <div>
-                    <label htmlFor="d-date" className="label">
-                      Date
-                    </label>
-                    <input
-                      id="d-date"
-                      name="scheduledDate"
-                      type="date"
-                      required
-                      className="field"
-                    />
-                  </div>
-                  <div>
-                    <label htmlFor="d-time" className="label">
-                      Start time
-                    </label>
-                    <input
-                      id="d-time"
-                      name="scheduledTime"
-                      type="time"
-                      required
-                      defaultValue="14:00"
-                      className="field"
-                    />
-                  </div>
-                </div>
-              )}
-
-              {commitment === "FLEXIBLE" && (
-                <div>
-                  <label htmlFor="d-window" className="label">
-                    When
-                  </label>
-                  <select
-                    id="d-window"
-                    name="flexibilityWindow"
-                    defaultValue="THIS_WEEK"
-                    className="field"
-                  >
-                    <option value="THIS_MORNING">This morning</option>
-                    <option value="THIS_AFTERNOON">This afternoon</option>
-                    <option value="THIS_EVENING">This evening</option>
-                    <option value="THIS_WEEK">This week</option>
-                    <option value="WEEKEND">Weekend</option>
-                  </select>
-                </div>
-              )}
-
-              {commitment === "WAITING" && (
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <div>
-                    <label htmlFor="d-who" className="label">
-                      Waiting on
-                    </label>
-                    <input
-                      id="d-who"
-                      name="waitingOnPerson"
-                      type="text"
-                      className="field"
-                    />
-                  </div>
-                  <div>
-                    <label htmlFor="d-what" className="label">
-                      For
-                    </label>
-                    <input
-                      id="d-what"
-                      name="waitingOnCondition"
-                      type="text"
-                      className="field"
-                    />
-                  </div>
-                </div>
-              )}
-
-              <div className="grid gap-4 sm:grid-cols-3">
-                <div>
-                  <label htmlFor="d-duration" className="label">
-                    Minutes
+                    Duration in minutes
                   </label>
                   <input
-                    id="d-duration"
-                    name="estimatedMinutes"
+                    id={`${idBase}-log-min`}
+                    name="durationMinutes"
                     type="text"
                     inputMode="numeric"
                     defaultValue="45"
-                    className="field"
+                    className="input w-full"
                   />
-                </div>
-                <div>
-                  <label htmlFor="d-due" className="label">
-                    Due date
-                  </label>
-                  <input id="d-due" name="dueDate" type="date" className="field" />
-                </div>
-                <div>
-                  <label htmlFor="d-priority" className="label">
-                    Priority
-                  </label>
-                  <select
-                    id="d-priority"
-                    name="priority"
-                    defaultValue="NORMAL"
-                    className="field"
-                  >
-                    <option value="LOW">Low</option>
-                    <option value="NORMAL">Normal</option>
-                    <option value="HIGH">High</option>
-                    <option value="CRITICAL">Critical</option>
-                  </select>
-                </div>
+                </fieldset>
               </div>
 
-              <div className="flex justify-end gap-2 pt-1">
+              <fieldset className="fieldset">
+                <label
+                  htmlFor={`${idBase}-log-loc`}
+                  className="fieldset-legend"
+                >
+                  Location (optional)
+                </label>
+                <input
+                  id={`${idBase}-log-loc`}
+                  name="physicalLocation"
+                  type="text"
+                  autoComplete="off"
+                  placeholder="Basilissa Office, Home"
+                  className="input w-full"
+                />
+              </fieldset>
+
+              <div className="modal-action">
                 <button
                   type="button"
                   onClick={closeCapture}
-                  className="button button-ghost"
+                  className="btn btn-ghost"
                 >
                   Cancel
                 </button>
-                <button type="submit" className="button button-primary">
-                  Save
-                </button>
+                <SubmitButton pendingLabel="Saving">Save to log</SubmitButton>
               </div>
             </form>
           )}
-        </div>
-      </dialog>
-    </div>
+        </OrbitModal>
+      </div>
+    </OrbitCaptureContext.Provider>
   );
 }

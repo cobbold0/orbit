@@ -1,27 +1,56 @@
 @import "tailwindcss";
+@plugin "daisyui" {
+  themes: false;
+}
+@plugin "daisyui/theme" {
+  name: "orbit";
+  default: true;
+  prefersdark: false;
+  color-scheme: light;
+  --color-base-100: #ffffff;
+  --color-base-200: #f6f7f9;
+  --color-base-300: #e7eaf0;
+  --color-base-content: #14171c;
+  --color-primary: #14171c;
+  --color-primary-content: #ffffff;
+  --color-secondary: #ffffff;
+  --color-secondary-content: #14171c;
+  --color-accent: #2457d6;
+  --color-accent-content: #ffffff;
+  --color-neutral: #14171c;
+  --color-neutral-content: #ffffff;
+  --color-info: #2457d6;
+  --color-info-content: #ffffff;
+  --color-success: #15803d;
+  --color-success-content: #ffffff;
+  --color-warning: #b45309;
+  --color-warning-content: #ffffff;
+  --color-error: #b42318;
+  --color-error-content: #ffffff;
+  --radius-selector: 0.5rem;
+  --radius-field: 0.625rem;
+  --radius-box: 1rem;
+  --size-selector: 0.25rem;
+  --size-field: 0.2625rem;
+  --border: 1px;
+  --depth: 0;
+  --noise: 0;
+}
 
-/* ------------------------------------------------------------------ */
-/* Design tokens (light white surface system)                          */
-/* ------------------------------------------------------------------ */
 :root {
-  --ink: #14171c;
   --text-2: #4b5260;
   --text-3: #667085;
-  --surface: #f6f7f9;
-  --surface-strong: #eceef2;
   --divider: rgb(20 23 28 / 0.08);
-  --field-border: #c2c7d0;
-  --accent: #2457d6;
   color-scheme: light;
 }
 
-html {
-  background: #ffffff;
+html,
+body {
+  background-color: var(--color-base-100);
+  color: var(--color-base-content);
 }
 
 body {
-  background: #ffffff;
-  color: var(--ink);
   font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Inter",
     "Segoe UI", system-ui, sans-serif;
   font-size: 1rem;
@@ -31,26 +60,68 @@ body {
   -webkit-text-size-adjust: 100%;
 }
 
-:where(a, button, input, select, textarea, summary):focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
+/* Readable 16px controls on mobile & desktop (prevents iOS focus zoom) */
+:where(.input, .select, .textarea) {
+  font-size: 1rem;
 }
 
-input[type="checkbox"] {
-  accent-color: var(--ink);
-  width: 1.125rem;
-  height: 1.125rem;
-  border-radius: 0.25rem;
-  cursor: pointer;
+/* Single crisp high-contrast focus ring instead of double concentric borders */
+:where(.input, .select, .textarea):is(:focus, :focus-within) {
+  outline: 2px solid var(--color-base-content);
+  outline-offset: -1px;
 }
 
-summary {
-  list-style: none;
-}
-summary::-webkit-details-marker {
-  display: none;
+:where(.fieldset) {
+  font-size: 0.9375rem;
 }
 
+:where(.btn) {
+  font-size: 0.9375rem;
+}
+
+:where(.btn-sm) {
+  font-size: 0.875rem;
+}
+
+:where(.dock .dock-label) {
+  font-size: 0.75rem;
+  font-weight: 500;
+}
+
+/* Prevent scroll chaining behind open modal dialogs without mutating html/body overflow */
+dialog.modal:modal {
+  overflow: hidden;
+  overscroll-behavior: contain;
+}
+
+dialog.modal::backdrop {
+  overflow: hidden;
+  overscroll-behavior: contain;
+}
+
+/* Dedicated drag handle only: keeps card text selectable & vertical touch scroll working */
+.drag-handle {
+  cursor: grab;
+  touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.drag-handle.dragging {
+  cursor: grabbing;
+}
+
+/* Crisp white surface secondary button on neutral cards */
+.btn-secondary {
+  border-color: rgb(20 23 28 / 0.12);
+  box-shadow: 0 1px 2px rgb(20 23 28 / 0.05);
+}
+.btn-secondary:hover:not(:disabled) {
+  background-color: #f9fafb;
+  border-color: rgb(20 23 28 / 0.2);
+}
+
+/* Accessible skip link / visually hidden utility */
 .visually-hidden:where(:not(:focus-within, :active)) {
   position: absolute !important;
   clip-path: inset(50%) !important;
@@ -63,11 +134,7 @@ summary::-webkit-details-marker {
   white-space: nowrap !important;
 }
 
-/* ------------------------------------------------------------------ */
-/* Components                                                          */
-/* ------------------------------------------------------------------ */
 @layer components {
-  /* Type scale: 32 / 18 / 16 / 15. Clear hierarchy and contrast. */
   .h1 {
     font-size: clamp(1.625rem, 1.35rem + 1vw, 2rem);
     line-height: 1.15;
@@ -82,7 +149,7 @@ summary::-webkit-details-marker {
   }
   .h3 {
     font-size: 0.9375rem;
-    line-height: 1.3;
+    line-height: 1.35;
     font-weight: 600;
     color: var(--text-2);
   }
@@ -105,34 +172,14 @@ summary::-webkit-details-marker {
     font-variant-numeric: tabular-nums;
   }
 
-  /* Page and cards (single card layer, never nested) */
   .page {
     display: flex;
     flex-direction: column;
     gap: 1.25rem;
   }
-  .card {
-    background: var(--surface);
-    border-radius: 1rem;
-    padding: 1.25rem;
-    box-shadow: 0 1px 2px rgb(20 23 28 / 0.04);
-  }
-  @media (min-width: 640px) {
-    .card {
-      padding: 1.5rem;
-    }
-  }
-  .card-head {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    justify-content: space-between;
-    gap: 0.75rem 1rem;
-    min-height: 2.25rem;
-  }
 
-  /* Rows live inside a card. Flat rows with hairline dividers, never boxes. */
-  .row {
+  /* Flat rows inside a DaisyUI card-body (never cards inside cards) */
+  .orbit-row {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
@@ -140,387 +187,21 @@ summary::-webkit-details-marker {
     gap: 0.75rem 1rem;
     padding-block: 0.875rem;
   }
-  .row + .row {
+  .orbit-row + .orbit-row {
     border-top: 1px solid var(--divider);
   }
-  .row-main {
-    flex: 1 1 14rem;
+  .orbit-row:last-child {
+    padding-bottom: 0;
+  }
+  .orbit-row-main {
+    flex: 1 1 11rem;
     min-width: 0;
   }
-  .row-actions {
+  .orbit-row-actions {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
     gap: 0.5rem;
-  }
-  .card-head + .row,
-  .card-head + .rows > .row:first-child {
-    padding-top: 0.625rem;
-  }
-  .card .row:last-child {
-    padding-bottom: 0;
-  }
-
-  /* Buttons */
-  .button {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    gap: 0.5rem;
-    min-height: 2.5rem;
-    padding: 0 1rem;
-    border-radius: 0.625rem;
-    font-size: 0.9375rem;
-    font-weight: 600;
-    line-height: 1;
-    white-space: nowrap;
-    cursor: pointer;
-    user-select: none;
-    transition: background-color 120ms ease, box-shadow 120ms ease,
-      transform 100ms ease;
-  }
-  .button:active:not(:disabled) {
-    transform: scale(0.98);
-  }
-  .button-primary {
-    background: var(--ink);
-    color: #ffffff;
-  }
-  .button-primary:hover:not(:disabled) {
-    background: #2b303a;
-  }
-  .button-secondary {
-    background: #ffffff;
-    color: var(--ink);
-    box-shadow: 0 0 0 1px rgb(20 23 28 / 0.1), 0 1px 2px rgb(20 23 28 / 0.06);
-  }
-  .button-secondary:hover:not(:disabled) {
-    background: #fbfbfc;
-    box-shadow: 0 0 0 1px rgb(20 23 28 / 0.16), 0 1px 2px rgb(20 23 28 / 0.08);
-  }
-  .button-ghost {
-    background: transparent;
-    color: var(--text-2);
-  }
-  .button-ghost:hover:not(:disabled) {
-    background: rgb(20 23 28 / 0.06);
-    color: var(--ink);
-  }
-  .button:disabled {
-    background: var(--surface-strong);
-    color: var(--text-3);
-    box-shadow: none;
-    cursor: not-allowed;
-  }
-  .button-ghost:disabled {
-    background: transparent;
-    opacity: 0.4;
-  }
-  .button-icon {
-    width: 2.5rem;
-    padding: 0;
-  }
-
-  /* Form fields */
-  .field {
-    width: 100%;
-    min-height: 2.75rem;
-    padding: 0.625rem 0.875rem;
-    border-radius: 0.625rem;
-    background: #ffffff;
-    color: var(--ink);
-    font-size: 1rem;
-    line-height: 1.4;
-    box-shadow: inset 0 0 0 1px var(--field-border);
-  }
-  .field:hover:not(:focus-visible) {
-    box-shadow: inset 0 0 0 1px #9aa1ac;
-  }
-  .field::placeholder {
-    color: var(--text-3);
-  }
-  .field:focus-visible {
-    outline: 2px solid var(--accent);
-    outline-offset: 0;
-    box-shadow: none;
-  }
-  textarea.field {
-    min-height: 7.5rem;
-    resize: vertical;
-  }
-  .label {
-    display: block;
-    margin-bottom: 0.375rem;
-    font-size: 0.9375rem;
-    font-weight: 500;
-    color: var(--text-2);
-  }
-
-  /* Filter chips */
-  .chip {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.5rem;
-    min-height: 2.5rem;
-    padding: 0 1rem;
-    border-radius: 999px;
-    background: var(--surface);
-    color: var(--text-2);
-    font-size: 0.9375rem;
-    font-weight: 500;
-    transition: background-color 120ms ease;
-  }
-  .chip:hover {
-    background: var(--surface-strong);
-  }
-  .chip[aria-current="true"],
-  .chip[aria-pressed="true"] {
-    background: var(--ink);
-    color: #ffffff;
-  }
-
-  /* Segmented control */
-  .segmented {
-    display: inline-flex;
-    max-width: 100%;
-    gap: 0.1875rem;
-    padding: 0.25rem;
-    border-radius: 0.75rem;
-    background: var(--surface-strong);
-  }
-  .segmented-item {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    gap: 0.375rem;
-    min-height: 2.25rem;
-    padding: 0 0.625rem;
-    border-radius: 0.5rem;
-    font-size: 0.9375rem;
-    font-weight: 500;
-    white-space: nowrap;
-    color: var(--text-2);
-    cursor: pointer;
-    transition: background-color 120ms ease, color 120ms ease;
-  }
-  @media (min-width: 640px) {
-    .segmented {
-      gap: 0.25rem;
-    }
-    .segmented-item {
-      padding: 0 0.875rem;
-    }
-  }
-  .segmented-item:hover {
-    color: var(--ink);
-  }
-  .segmented-item[aria-current="true"],
-  .segmented-item[aria-pressed="true"] {
-    background: #ffffff;
-    color: var(--ink);
-    font-weight: 600;
-    box-shadow: 0 1px 3px rgb(20 23 28 / 0.12);
-  }
-
-  /* Navigation */
-  .nav-link {
-    display: flex;
-    align-items: center;
-    gap: 0.75rem;
-    min-height: 2.75rem;
-    padding: 0 0.75rem;
-    border-radius: 0.625rem;
-    font-size: 0.9375rem;
-    font-weight: 500;
-    color: var(--text-2);
-    transition: background-color 120ms ease;
-  }
-  .nav-link:hover {
-    background: var(--surface);
-    color: var(--ink);
-  }
-  .nav-link[aria-current="page"] {
-    background: var(--surface-strong);
-    color: var(--ink);
-    font-weight: 600;
-  }
-  .count-badge {
-    margin-inline-start: auto;
-    min-width: 1.5rem;
-    padding: 0 0.5rem;
-    border-radius: 999px;
-    background: var(--ink);
-    color: #ffffff;
-    font-size: 0.8125rem;
-    font-weight: 600;
-    line-height: 1.5rem;
-    text-align: center;
-  }
-
-  /* Dropdown menu built on <details> */
-  .menu-wrap {
-    position: relative;
-    display: inline-block;
-  }
-  .menu-wrap > summary {
-    cursor: pointer;
-  }
-  .panel {
-    position: absolute;
-    top: calc(100% + 0.375rem);
-    z-index: 40;
-    min-width: 13.5rem;
-    max-width: calc(100vw - 1.5rem);
-    padding: 0.375rem;
-    border-radius: 0.875rem;
-    background: #ffffff;
-    box-shadow: 0 0 0 1px rgb(20 23 28 / 0.08), 0 12px 32px rgb(20 23 28 / 0.14);
-  }
-  .menu-wrap.align-end .panel {
-    right: 0;
-  }
-  .menu-wrap.align-start .panel {
-    left: 0;
-  }
-  .panel-form {
-    width: min(22rem, calc(100vw - 1.5rem));
-    padding: 1rem;
-  }
-  .menu-item {
-    display: flex;
-    align-items: center;
-    gap: 0.625rem;
-    width: 100%;
-    min-height: 2.5rem;
-    padding: 0.5rem 0.75rem;
-    border-radius: 0.5rem;
-    font-size: 0.9375rem;
-    text-align: start;
-    color: var(--ink);
-    cursor: pointer;
-  }
-  .menu-item:hover {
-    background: var(--surface);
-  }
-
-  /* Sheet (native dialog) */
-  dialog.sheet {
-    width: min(36rem, calc(100% - 2rem));
-    max-height: 90dvh;
-    margin: auto;
-    padding: 0;
-    border: 0;
-    border-radius: 1.25rem;
-    background: #ffffff;
-    color: var(--ink);
-    box-shadow: 0 24px 64px rgb(20 23 28 / 0.22);
-  }
-  dialog.sheet:modal {
-    overscroll-behavior: contain;
-  }
-  dialog.sheet::backdrop {
-    background: rgb(20 23 28 / 0.4);
-    overflow: hidden;
-    overscroll-behavior: contain;
-  }
-  @media (max-width: 639px) {
-    dialog.sheet {
-      width: 100%;
-      max-width: 100%;
-      margin-block-end: 0;
-      border-end-start-radius: 0;
-      border-end-end-radius: 0;
-    }
-  }
-
-  /* Mobile header bar and bottom tabbar */
-  .mobile-bar {
-    position: sticky;
-    top: 0;
-    z-index: 25;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 0.75rem;
-    padding: 0.75rem 1rem;
-    background: rgb(255 255 255 / 0.94);
-    backdrop-filter: blur(16px) saturate(180%);
-    -webkit-backdrop-filter: blur(16px) saturate(180%);
-    box-shadow: 0 1px 0 var(--divider);
-  }
-
-  .tabbar {
-    position: fixed;
-    inset-inline: 0;
-    bottom: 0;
-    z-index: 30;
-    padding: 0.375rem 0.5rem calc(0.375rem + env(safe-area-inset-bottom, 0px));
-    background: rgb(255 255 255 / 0.94);
-    backdrop-filter: blur(16px) saturate(180%);
-    -webkit-backdrop-filter: blur(16px) saturate(180%);
-    box-shadow: 0 -1px 0 var(--divider);
-  }
-  .tab {
-    position: relative;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 0.1875rem;
-    min-height: 3.25rem;
-    border-radius: 0.625rem;
-    font-size: 0.8125rem;
-    font-weight: 500;
-    color: var(--text-3);
-  }
-  .tab[aria-current="page"] {
-    color: var(--ink);
-    font-weight: 600;
-  }
-  .tab .dot-badge {
-    position: absolute;
-    top: 0.25rem;
-    left: calc(50% + 0.375rem);
-    min-width: 1.125rem;
-    padding: 0 0.25rem;
-    border-radius: 999px;
-    background: var(--ink);
-    color: #fff;
-    font-size: 0.6875rem;
-    font-weight: 700;
-    line-height: 1.125rem;
-    text-align: center;
-  }
-
-  progress.bar {
-    width: 100%;
-    height: 0.375rem;
-    border-radius: 999px;
-    appearance: none;
-    background: var(--surface-strong);
-    overflow: hidden;
-  }
-  progress.bar::-webkit-progress-bar {
-    background: var(--surface-strong);
-  }
-  progress.bar::-webkit-progress-value {
-    background: var(--ink);
-    border-radius: 999px;
-  }
-  progress.bar::-moz-progress-bar {
-    background: var(--ink);
-    border-radius: 999px;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .button,
-  .chip,
-  .nav-link {
-    transition: none;
-  }
-  .button:active:not(:disabled) {
-    transform: none;
   }
 }
 
