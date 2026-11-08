@@ -233,6 +233,7 @@ export function OrbitShell({
                   <li key={item.href}>
                     <Link
                       href={item.href}
+                      prefetch={true}
                       aria-current={active ? "page" : undefined}
                       className={`py-2.5 font-medium ${active ? "menu-active" : ""}`}
                     >
@@ -366,6 +367,7 @@ export function OrbitShell({
               <Link
                 key={item.href}
                 href={item.href}
+                prefetch={true}
                 aria-current={active ? "page" : undefined}
                 className={active ? "dock-active" : ""}
               >
