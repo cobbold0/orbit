@@ -1,6 +1,27 @@
-import { RoutineState, TaskStatus } from "@prisma/client";
+import { TaskStatus } from "@prisma/client";
+import { Temporal } from "temporal-polyfill";
 import { prisma } from "@/lib/db/prisma";
 import { getLocalWallClockInfo } from "@/lib/time/timezone";
+
+export interface DayScheduleSummary {
+  dayName: string;
+  dateStr: string;
+  isoDayOfWeek: number;
+  routinesAndLocations: {
+    title: string;
+    kind: string;
+    physicalLocation: string | null;
+    startTime: string;
+    endTime: string;
+    lifeAreaName: string | null;
+  }[];
+  scheduledTasks: {
+    title: string;
+    lifeAreaName: string;
+    startTime: string;
+    endTime: string;
+  }[];
+}
 
 export interface UserOrbitContext {
   userId: string;
@@ -8,6 +29,8 @@ export interface UserOrbitContext {
   localDate: string;
   localTimeHHmm: string;
   isoDayOfWeek: number;
+  todaySchedule: DayScheduleSummary;
+  tomorrowSchedule: DayScheduleSummary;
   userPreferences: {
     declaredWakeTime: string;
     declaredSleepTime: string;
@@ -101,9 +124,9 @@ export async function retrieveUserOrbitContext(
         where: {
           userId,
           isActive: true,
-          state: RoutineState.DECLARED,
         },
         include: { lifeArea: true },
+        orderBy: { startTimeLocal: "asc" },
       }),
       prisma.activityRecord.findMany({
         where: { userId, isConfirmed: true },
@@ -116,12 +139,93 @@ export async function retrieveUserOrbitContext(
   const ianaTimeZone = pref?.ianaTimeZone ?? "Africa/Lagos";
   const wallClock = getLocalWallClockInfo(nowUtc, ianaTimeZone);
 
+  const todayPlain = Temporal.PlainDate.from(wallClock.localDate);
+  const tomorrowPlain = todayPlain.add({ days: 1 });
+  const dayNames = [
+    "",
+    "Monday",
+    "Tuesday",
+    "Wednesday",
+    "Thursday",
+    "Friday",
+    "Saturday",
+    "Sunday",
+  ];
+
+  const buildDaySchedule = (plainDate: Temporal.PlainDate): DayScheduleSummary => {
+    const isoDay = plainDate.dayOfWeek;
+    const dateStr = plainDate.toString();
+    const dayName = dayNames[isoDay] ?? "";
+
+    const routinesForDay = routines
+      .filter((r) => r.daysOfWeek.includes(isoDay))
+      .map((r) => ({
+        title: r.title,
+        kind: r.kind,
+        physicalLocation: r.physicalLocation,
+        startTime: r.startTimeLocal,
+        endTime: r.endTimeLocal,
+        lifeAreaName: r.lifeArea?.name ?? null,
+      }));
+
+    const tasksForDay = tasks
+      .filter((t) => {
+        if (!t.scheduledStart) return false;
+        try {
+          const taskInstant = Temporal.Instant.fromEpochMilliseconds(
+            t.scheduledStart.getTime()
+          );
+          const taskZDT = taskInstant.toZonedDateTimeISO(ianaTimeZone);
+          return taskZDT.toPlainDate().toString() === dateStr;
+        } catch {
+          return false;
+        }
+      })
+      .map((t) => {
+        const startInstant = Temporal.Instant.fromEpochMilliseconds(
+          t.scheduledStart!.getTime()
+        );
+        const startZDT = startInstant.toZonedDateTimeISO(ianaTimeZone);
+        let endStr = "";
+        if (t.scheduledEnd) {
+          const endInstant = Temporal.Instant.fromEpochMilliseconds(
+            t.scheduledEnd.getTime()
+          );
+          const endZDT = endInstant.toZonedDateTimeISO(ianaTimeZone);
+          endStr = `${String(endZDT.hour).padStart(2, "0")}:${String(
+            endZDT.minute
+          ).padStart(2, "0")}`;
+        }
+        return {
+          title: t.title,
+          lifeAreaName: t.lifeArea.name,
+          startTime: `${String(startZDT.hour).padStart(2, "0")}:${String(
+            startZDT.minute
+          ).padStart(2, "0")}`,
+          endTime: endStr,
+        };
+      });
+
+    return {
+      dayName,
+      dateStr,
+      isoDayOfWeek: isoDay,
+      routinesAndLocations: routinesForDay,
+      scheduledTasks: tasksForDay,
+    };
+  };
+
+  const todaySchedule = buildDaySchedule(todayPlain);
+  const tomorrowSchedule = buildDaySchedule(tomorrowPlain);
+
   return {
     userId,
     ianaTimeZone,
     localDate: wallClock.localDate,
     localTimeHHmm: wallClock.localTimeHHmm,
     isoDayOfWeek: wallClock.isoDayOfWeek,
+    todaySchedule,
+    tomorrowSchedule,
     userPreferences: {
       declaredWakeTime: pref?.declaredWakeTime ?? "07:30",
       declaredSleepTime: pref?.declaredSleepTime ?? "23:00",

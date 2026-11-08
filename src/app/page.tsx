@@ -406,17 +406,17 @@ export default async function TodayPage() {
                       taskId={task.id}
                       taskTitle={task.title}
                       commitmentType="SCHEDULED"
+                      hideLabel={true}
+                      triggerClassName="btn btn-ghost btn-sm btn-square"
                     />
                     {task.status !== "IN_PROGRESS" && (
                       <form action={startTaskAction}>
                         <input type="hidden" name="taskId" value={task.id} />
                         <ActionSubmitButton
-                          className="btn btn-secondary btn-sm"
+                          className="btn btn-ghost btn-sm btn-square text-primary hover:bg-primary/10"
                           ariaLabel={`Start ${task.title}`}
                           icon={<Play className="h-4 w-4" aria-hidden="true" />}
-                        >
-                          Start
-                        </ActionSubmitButton>
+                        />
                       </form>
                     )}
                     <EditTaskModal
@@ -427,17 +427,20 @@ export default async function TodayPage() {
                         estimatedMinutes: task.estimatedMinutes,
                       }}
                       lifeAreas={data.lifeAreas}
+                      triggerClassName="btn btn-ghost btn-sm btn-square"
                     />
-                    <DeleteTaskButton taskId={task.id} taskTitle={task.title} />
+                    <DeleteTaskButton
+                      taskId={task.id}
+                      taskTitle={task.title}
+                      className="btn btn-ghost btn-sm btn-square text-error hover:bg-error/10"
+                    />
                     <form action={completeTaskAction}>
                       <input type="hidden" name="taskId" value={task.id} />
                       <ActionSubmitButton
-                        className="btn btn-primary btn-sm"
+                        className="btn btn-ghost btn-sm btn-square text-success hover:bg-success/10"
                         ariaLabel={`Done ${task.title}`}
                         icon={<Check className="h-4 w-4" aria-hidden="true" />}
-                      >
-                        Done
-                      </ActionSubmitButton>
+                      />
                     </form>
                   </div>
                 </div>
@@ -491,18 +494,25 @@ export default async function TodayPage() {
                       estimatedMinutes: task.estimatedMinutes,
                     }}
                     lifeAreas={data.lifeAreas}
+                    triggerClassName="btn btn-ghost btn-sm btn-square"
                   />
-                  <DeleteTaskButton taskId={task.id} taskTitle={task.title} />
                   <RescheduleTaskModal
                     taskId={task.id}
                     taskTitle={task.title}
                     commitmentType="FLEXIBLE"
                     defaultDateStr={data.wallClock.localDate}
+                    hideLabel={true}
+                    triggerClassName="btn btn-ghost btn-sm btn-square"
+                  />
+                  <DeleteTaskButton
+                    taskId={task.id}
+                    taskTitle={task.title}
+                    className="btn btn-ghost btn-sm btn-square text-error hover:bg-error/10"
                   />
                   <form action={startTaskAction}>
                     <input type="hidden" name="taskId" value={task.id} />
                     <ActionSubmitButton
-                      className="btn btn-ghost btn-sm btn-square"
+                      className="btn btn-ghost btn-sm btn-square text-primary hover:bg-primary/10"
                       ariaLabel={`Start ${task.title}`}
                       icon={<Play className="h-4 w-4" aria-hidden="true" />}
                     />
@@ -510,7 +520,7 @@ export default async function TodayPage() {
                   <form action={completeTaskAction}>
                     <input type="hidden" name="taskId" value={task.id} />
                     <ActionSubmitButton
-                      className="btn btn-secondary btn-sm btn-square"
+                      className="btn btn-ghost btn-sm btn-square text-success hover:bg-success/10"
                       ariaLabel={`Mark ${task.title} done`}
                       icon={<Check className="h-4 w-4" aria-hidden="true" />}
                     />
@@ -576,12 +586,17 @@ export default async function TodayPage() {
                         estimatedMinutes: task.estimatedMinutes,
                       }}
                       lifeAreas={data.lifeAreas}
+                      triggerClassName="btn btn-ghost btn-sm btn-square"
                     />
-                    <DeleteTaskButton taskId={task.id} taskTitle={task.title} />
+                    <DeleteTaskButton
+                      taskId={task.id}
+                      taskTitle={task.title}
+                      className="btn btn-ghost btn-sm btn-square text-error hover:bg-error/10"
+                    />
                     <form action={completeTaskAction}>
                       <input type="hidden" name="taskId" value={task.id} />
                       <ActionSubmitButton
-                        className="btn btn-ghost btn-sm btn-square"
+                        className="btn btn-ghost btn-sm btn-square text-success hover:bg-success/10"
                         ariaLabel={`Done ${task.title}`}
                         icon={<Check className="h-4 w-4" aria-hidden="true" />}
                       />
@@ -615,12 +630,17 @@ export default async function TodayPage() {
                         estimatedMinutes: task.estimatedMinutes,
                       }}
                       lifeAreas={data.lifeAreas}
+                      triggerClassName="btn btn-ghost btn-sm btn-square"
                     />
-                    <DeleteTaskButton taskId={task.id} taskTitle={task.title} />
+                    <DeleteTaskButton
+                      taskId={task.id}
+                      taskTitle={task.title}
+                      className="btn btn-ghost btn-sm btn-square text-error hover:bg-error/10"
+                    />
                     <form action={completeTaskAction}>
                       <input type="hidden" name="taskId" value={task.id} />
                       <ActionSubmitButton
-                        className="btn btn-ghost btn-sm btn-square"
+                        className="btn btn-ghost btn-sm btn-square text-success hover:bg-success/10"
                         ariaLabel={`Done ${task.title}`}
                         icon={<Check className="h-4 w-4" aria-hidden="true" />}
                       />

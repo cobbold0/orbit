@@ -138,12 +138,19 @@ export function TasksCard({
                     notes: task.notes,
                   }}
                   lifeAreas={lifeAreas}
+                  triggerClassName="btn btn-ghost btn-sm btn-square"
                 />
-                <DeleteTaskButton taskId={task.id} taskTitle={task.title} />
                 <RescheduleTaskModal
                   taskId={task.id}
                   taskTitle={task.title}
                   commitmentType={task.commitmentType}
+                  hideLabel={true}
+                  triggerClassName="btn btn-ghost btn-sm btn-square"
+                />
+                <DeleteTaskButton
+                  taskId={task.id}
+                  taskTitle={task.title}
+                  className="btn btn-ghost btn-sm btn-square text-error hover:bg-error/10"
                 />
                 <form
                   action={async (formData) => {
@@ -153,12 +160,10 @@ export function TasksCard({
                 >
                   <input type="hidden" name="taskId" value={task.id} />
                   <ActionSubmitButton
-                    className="btn btn-secondary btn-sm"
+                    className="btn btn-ghost btn-sm btn-square text-success hover:bg-success/10"
                     ariaLabel={`Done ${task.title}`}
                     icon={<Check className="h-4 w-4" aria-hidden="true" />}
-                  >
-                    Done
-                  </ActionSubmitButton>
+                  />
                 </form>
               </div>
             </div>

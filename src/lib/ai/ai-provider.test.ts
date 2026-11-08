@@ -11,6 +11,36 @@ const sampleContext: UserOrbitContext = {
   localDate: "2026-11-08", // Sunday
   localTimeHHmm: "14:00",
   isoDayOfWeek: 7,
+  todaySchedule: {
+    dayName: "Sunday",
+    dateStr: "2026-11-08",
+    isoDayOfWeek: 7,
+    routinesAndLocations: [],
+    scheduledTasks: [
+      {
+        title: "Refine Basilissa attendance dashboard exception filters",
+        lifeAreaName: "Basilissa",
+        startTime: "09:00",
+        endTime: "10:00",
+      },
+    ],
+  },
+  tomorrowSchedule: {
+    dayName: "Monday",
+    dateStr: "2026-11-09",
+    isoDayOfWeek: 1,
+    routinesAndLocations: [
+      {
+        title: "Engineering Office Shift",
+        kind: "WORK_BLOCK",
+        physicalLocation: "Basilissa Tech Hub, Accra",
+        startTime: "09:00",
+        endTime: "17:00",
+        lifeAreaName: "Basilissa",
+      },
+    ],
+    scheduledTasks: [],
+  },
   userPreferences: {
     declaredWakeTime: "07:30",
     declaredSleepTime: "23:00",
@@ -166,5 +196,28 @@ describe("AI Provider & Memory Extraction Engine", () => {
     expect(plan.proposedMutations).toHaveLength(0);
     expect(plan.replyMarkdown).toContain("KFC");
     expect(plan.replyMarkdown).toContain("Which Life Area");
+  });
+
+  it("answers where the user has to be tomorrow based on declared routines and physical locations", async () => {
+    const provider = new DeterministicFallbackProvider();
+    const plan = await provider.planWithContext(
+      "Where am I going tomorrow?",
+      sampleContext
+    );
+
+    expect(plan.replyMarkdown).toContain("Basilissa Tech Hub, Accra");
+    expect(plan.replyMarkdown).toContain("Engineering Office Shift");
+    expect(plan.replyMarkdown).toContain("09:00 to 17:00");
+  });
+
+  it("answers what the user has on their schedule tomorrow", async () => {
+    const provider = new DeterministicFallbackProvider();
+    const plan = await provider.planWithContext(
+      "What do I have tomorrow?",
+      sampleContext
+    );
+
+    expect(plan.replyMarkdown).toContain("Engineering Office Shift");
+    expect(plan.replyMarkdown).toContain("Basilissa Tech Hub, Accra");
   });
 });

@@ -13,7 +13,8 @@ export function RescheduleTaskModal({
   defaultDateStr,
   defaultTimeStr = "14:00",
   triggerLabel,
-  triggerClassName = "btn btn-ghost btn-sm",
+  hideLabel = false,
+  triggerClassName = "btn btn-ghost btn-sm btn-square",
 }: {
   taskId: string;
   taskTitle: string;
@@ -21,6 +22,7 @@ export function RescheduleTaskModal({
   defaultDateStr?: string;
   defaultTimeStr?: string;
   triggerLabel?: string;
+  hideLabel?: boolean;
   triggerClassName?: string;
 }) {
   const idBase = useId();
@@ -64,10 +66,13 @@ export function RescheduleTaskModal({
         type="button"
         onClick={open}
         aria-label={`${label} ${taskTitle}`}
+        title={`${label} task`}
         className={triggerClassName}
       >
-        <CalendarClock className="h-3.5 w-3.5" aria-hidden="true" />
-        <span>{label}</span>
+        <CalendarClock className="h-4 w-4" aria-hidden="true" />
+        {!hideLabel && !triggerClassName.includes("btn-square") && (
+          <span>{label}</span>
+        )}
       </button>
 
       <OrbitModal

@@ -8,7 +8,7 @@ import { useOrbitToast } from "@/components/ui/orbit-toast";
 export function DeleteTaskButton({
   taskId,
   taskTitle,
-  className = "btn btn-ghost btn-xs btn-square text-base-content/40 hover:text-error hover:bg-error/10 transition-colors",
+  className = "btn btn-ghost btn-sm btn-square text-error hover:bg-error/10 transition-colors",
 }: {
   taskId: string;
   taskTitle: string;
@@ -43,9 +43,9 @@ export function DeleteTaskButton({
       className={className}
     >
       {isDeleting ? (
-        <Loader2 className="h-3.5 w-3.5 animate-spin text-error" />
+        <Loader2 className="h-4 w-4 animate-spin text-error" />
       ) : (
-        <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
+        <Trash2 className="h-4 w-4" aria-hidden="true" />
       )}
     </button>
   );

@@ -572,65 +572,167 @@ export class DeterministicFallbackProvider implements AIProvider {
       };
     }
 
-    // Case 3: Contextual Query, Today's agenda, or Priority Advice
-    const scheduledTasks = userContext.openTasks.filter(
-      (t) => t.commitmentType === "SCHEDULED"
-    );
-    const flexibleTasks = userContext.openTasks.filter(
-      (t) => t.commitmentType === "FLEXIBLE"
-    );
-    const waitingTasks = userContext.openTasks.filter(
-      (t) => t.commitmentType === "WAITING"
-    );
+    // Case 3: Schedule, Agenda, Tomorrow, Today, or Places to be query
+    const isTomorrow = /\btomorrow\b/i.test(lower);
+    const isLocationQuery =
+      /\b(?:where\s+(?:am\s+i|do\s+i)\s+(?:going|have\s+to\s+be)|where\s+to\s+go|places?\s+to\s+be|going|places?)\b/i.test(
+        lower
+      );
+    const isScheduleQuery =
+      /\b(?:what\s+(?:do\s+i\s+have|is\s+my\s+schedule|is\s+on\s+my\s+schedule)|schedule|agenda|today|tomorrow|commitments?)\b/i.test(
+        lower
+      );
 
-    const isTodayQuery = /\b(?:today|now|tonight|this\s+afternoon|this\s+morning|day|schedule|agenda)\b/i.test(lower);
+    if (isTomorrow || isLocationQuery || isScheduleQuery) {
+      const schedule = isTomorrow
+        ? userContext.tomorrowSchedule
+        : userContext.todaySchedule;
+      const dayLabel = isTomorrow ? "tomorrow" : "today";
+      const capDayLabel = isTomorrow ? "Tomorrow" : "Today";
 
-    let replyMarkdown = "";
-    let advice = "";
+      const routinesWithLocation = (schedule?.routinesAndLocations ?? []).filter(
+        (r) => r.physicalLocation && r.physicalLocation.trim().length > 0
+      );
+      const allRoutines = schedule?.routinesAndLocations ?? [];
+      const scheduledTasks = schedule?.scheduledTasks ?? [];
 
-    if (isTodayQuery) {
-      if (scheduledTasks.length === 0 && flexibleTasks.length === 0) {
-        replyMarkdown = `Your day is completely open! You don't have any scheduled appointments or deadlines on your calendar today.\n\nEnjoy the breathing room to recharge, or feel free to jot down any new thoughts whenever inspiration strikes.`;
-        advice = "No urgent demands today. Take time to rest or explore personal interests.";
-      } else if (scheduledTasks.length > 0) {
-        const scheduledList = scheduledTasks
-          .slice(0, 4)
-          .map((t) => `• ${t.title} (${t.lifeAreaName})`)
-          .join("\n");
-        const flexNote = flexibleTasks.length > 0
-          ? `\n\nYou also have ${flexibleTasks.length} flexible task${flexibleTasks.length > 1 ? "s" : ""} on deck if you find extra time.`
-          : "";
-        replyMarkdown = `Here is how your day is shaping up:\n\n${scheduledList}${flexNote}\n\nMy advice: start with "${scheduledTasks[0]?.title}" to build quick momentum early, and remember to leave a buffer between blocks so you don't feel rushed.`;
-        advice = `Focus on "${scheduledTasks[0]?.title}" first to lock in an early win.`;
-      } else {
-        const flexList = flexibleTasks
-          .slice(0, 3)
-          .map((t) => `• ${t.title} (${t.lifeAreaName})`)
-          .join("\n");
-        replyMarkdown = `You have no hard-scheduled appointments today, which gives you great freedom.\n\nYou do have ${flexibleTasks.length} flexible item${flexibleTasks.length > 1 ? "s" : ""} you could look at:\n\n${flexList}\n\nMy advice: pick "${flexibleTasks[0]?.title}" for a focused 30 to 45 minute sprint while your energy is fresh, and keep the rest of your day relaxed.`;
-        advice = `Tackle "${flexibleTasks[0]?.title}" when ready, with no rigid schedule constraints.`;
+      let replyMarkdown = "";
+      let advice = "";
+      const facts: string[] = [
+        `${schedule?.dayName ?? capDayLabel} (${schedule?.dateStr ?? userContext.localDate}) has ${allRoutines.length} routine(s) and ${scheduledTasks.length} scheduled task(s).`,
+      ];
+
+      if (isLocationQuery) {
+        if (routinesWithLocation.length > 0) {
+          const locList = routinesWithLocation
+            .map(
+              (r) =>
+                `• **${r.physicalLocation}** for **${r.title}** (${r.startTime} to ${r.endTime}${
+                  r.lifeAreaName ? `, ${r.lifeAreaName}` : ""
+                })`
+            )
+            .join("\n");
+          replyMarkdown = `${capDayLabel} (${schedule?.dayName ?? ""}), you have places to be:\n\n${locList}\n\nMake sure to factor in travel time and leave with a buffer so you have a smooth trip!`;
+          advice = `Head out with a travel buffer for ${routinesWithLocation[0]?.physicalLocation}.`;
+          facts.push(
+            ...routinesWithLocation.map(
+              (r) =>
+                `${r.title} at ${r.physicalLocation} (${r.startTime} - ${r.endTime})`
+            )
+          );
+        } else if (allRoutines.length > 0) {
+          const rList = allRoutines
+            .map((r) => `• **${r.title}** (${r.startTime} to ${r.endTime})`)
+            .join("\n");
+          replyMarkdown = `${capDayLabel} (${schedule?.dayName ?? ""}) you have routines on your calendar, but none have a specific physical location attached:\n\n${rList}\n\nYou don't have anywhere specific you need to travel to!`;
+          advice =
+            "All scheduled routines are flexible or remote without travel requirements.";
+        } else {
+          replyMarkdown = `${capDayLabel} (${schedule?.dayName ?? ""}), you don't have anywhere you need to go! You have no travel or physical locations on your schedule.`;
+          advice = `${capDayLabel} is open from travel obligations.`;
+        }
+
+        return {
+          replyMarkdown,
+          citedFacts: facts,
+          assumptionsOrSuggestions: [advice],
+          proposedMutations: [],
+          providerUsed: "DETERMINISTIC_FALLBACK",
+        };
       }
-    } else {
-      if (userContext.openTasks.length === 0) {
-        replyMarkdown = `Everything is currently clear across your areas! No open tasks or pending follow-ups are waiting.\n\nWhenever something comes to mind, you can ask me to capture a task, note, or log your work.`;
-        advice = "All caught up. Good time for reflection or planning ahead.";
+
+      // General schedule for tomorrow or today
+      if (allRoutines.length === 0 && scheduledTasks.length === 0) {
+        if (isTomorrow) {
+          replyMarkdown = `Tomorrow (${schedule?.dayName ?? ""}) your calendar is completely open! You don't have any routines or scheduled appointments booked yet.\n\nEnjoy the space to work on personal priorities or flexible tasks at your own pace.`;
+          advice = "Wide open day ahead. Good opportunity for focused deep work.";
+        } else {
+          const flexibleTasks = userContext.openTasks.filter(
+            (t) => t.commitmentType === "FLEXIBLE"
+          );
+          if (flexibleTasks.length > 0) {
+            const flexList = flexibleTasks
+              .slice(0, 3)
+              .map((t) => `• ${t.title} (${t.lifeAreaName})`)
+              .join("\n");
+            replyMarkdown = `You have no hard-scheduled appointments today, which gives you great freedom.\n\nYou do have ${flexibleTasks.length} flexible item${
+              flexibleTasks.length > 1 ? "s" : ""
+            } on deck:\n\n${flexList}\n\nMy advice: pick "${flexibleTasks[0]?.title}" for a focused sprint while your energy is fresh.`;
+            advice = `Tackle "${flexibleTasks[0]?.title}" when ready.`;
+          } else {
+            replyMarkdown = `Your day is completely open! You don't have any scheduled appointments, routines, or open tasks waiting.\n\nEnjoy the breathing room to recharge!`;
+            advice =
+              "No urgent demands today. Take time to rest or explore personal interests.";
+          }
+        }
       } else {
-        const topTasks = userContext.openTasks.slice(0, 4);
-        const taskList = topTasks
-          .map((t) => `• ${t.title} (${t.lifeAreaName})`)
-          .join("\n");
-        replyMarkdown = `Here are your main priorities across areas:\n\n${taskList}\n\nMy recommendation: prioritize "${topTasks[0]?.title}" first. Getting that across the finish line will free up mental clarity for everything else.`;
-        advice = `Start with "${topTasks[0]?.title}" to create positive momentum.`;
+        const sections: string[] = [];
+
+        if (allRoutines.length > 0) {
+          const rLines = allRoutines.map((r) => {
+            const loc = r.physicalLocation ? ` at **${r.physicalLocation}**` : "";
+            return `• **${r.title}**${loc} (${r.startTime} - ${r.endTime})`;
+          });
+          sections.push(`**Routines & Places to be:**\n${rLines.join("\n")}`);
+          facts.push(
+            ...allRoutines.map((r) => `${r.title} (${r.startTime}-${r.endTime})`)
+          );
+        }
+
+        if (scheduledTasks.length > 0) {
+          const tLines = scheduledTasks.map(
+            (t) => `• **${t.title}** (${t.lifeAreaName}, ${t.startTime})`
+          );
+          sections.push(`**Scheduled Commitments:**\n${tLines.join("\n")}`);
+          facts.push(
+            ...scheduledTasks.map((t) => `${t.title} at ${t.startTime}`)
+          );
+        }
+
+        replyMarkdown = `Here is what's on your schedule for ${dayLabel} (${schedule?.dayName ?? ""}):\n\n${sections.join(
+          "\n\n"
+        )}`;
+        const firstItem = allRoutines[0] ?? scheduledTasks[0];
+        advice = `Focus on preparing for ${firstItem?.title} first to establish a steady cadence.`;
       }
+
+      return {
+        replyMarkdown,
+        citedFacts: facts,
+        assumptionsOrSuggestions: [advice],
+        proposedMutations: [],
+        providerUsed: "DETERMINISTIC_FALLBACK",
+      };
     }
 
+    // Case 4: Default fallback for general open task questions
+    const topTasks = userContext.openTasks.slice(0, 4);
+    if (topTasks.length === 0) {
+      return {
+        replyMarkdown: `Everything is currently clear across your areas! No open tasks or pending follow-ups are waiting.\n\nWhenever something comes to mind, you can ask me to capture a task, note, or log your work.`,
+        citedFacts: [
+          `Local date in ${userContext.ianaTimeZone}: ${userContext.localDate}.`,
+        ],
+        assumptionsOrSuggestions: [
+          "All caught up. Good time for reflection or planning ahead.",
+        ],
+        proposedMutations: [],
+        providerUsed: "DETERMINISTIC_FALLBACK",
+      };
+    }
+
+    const taskList = topTasks
+      .map((t) => `• ${t.title} (${t.lifeAreaName})`)
+      .join("\n");
     return {
-      replyMarkdown,
+      replyMarkdown: `Here are your main priorities across areas:\n\n${taskList}\n\nMy recommendation: prioritize "${topTasks[0]?.title}" first. Getting that across the finish line will free up mental clarity for everything else.`,
       citedFacts: [
-        `${scheduledTasks.length} scheduled, ${flexibleTasks.length} flexible, and ${waitingTasks.length} waiting tasks active.`,
+        `${userContext.openTasks.length} open task(s) active across your areas.`,
         `Local date in ${userContext.ianaTimeZone}: ${userContext.localDate}.`,
       ],
-      assumptionsOrSuggestions: [advice],
+      assumptionsOrSuggestions: [
+        `Start with "${topTasks[0]?.title}" to create positive momentum.`,
+      ],
       proposedMutations: [],
       providerUsed: "DETERMINISTIC_FALLBACK",
     };
@@ -783,7 +885,19 @@ CRITICAL SAFETY & GROUNDING RULES:
 3. Distinguish confirmed facts ("citedFacts") from recommendations or suggestions ("assumptionsOrSuggestions").
 4. Physical location, employer, active project, and availability are independent.
 5. Use short, direct, natural sentences. Never use double dashes (--) or em-dashes.
-6. SUPPORTED APP ACTIONS & MUTATION SCHEMAS:
+6. SCHEDULE, ROUTINES, LOCATIONS & "WHERE AM I GOING" RULES:
+   - Orbit tracks both scheduled tasks AND recurring routines/places to be in the user context:
+     * Check "todaySchedule" and "tomorrowSchedule" (which contain "routinesAndLocations" and "scheduledTasks").
+     * Routines in "routinesAndLocations" and "declaredRoutines" specify "physicalLocation" (e.g. office, gym, client site, company premises), "startTime", "endTime", "title", and "lifeAreaName".
+   - When the user asks:
+     * "Where am I going tomorrow?", "Where do I have to be tomorrow?", "What do I have tomorrow?"
+     * "Where am I going today?", "Where do I have to be today?", "What do I have today?"
+     * "What's my schedule?", "Where do I need to be?", "Do I have anywhere to go?"
+   - Read directly from "tomorrowSchedule" (when asking about tomorrow) or "todaySchedule" (when asking about today).
+   - If they have a routine with a "physicalLocation", explicitly tell them where they are going and the time window (e.g., "Tomorrow you are heading to [physicalLocation] for [title] from [startTime] to [endTime]").
+   - If they have scheduled tasks or routines without physical locations, summarize them clearly by time and area.
+   - If they have no routines or scheduled tasks on that day, tell them warmly that their schedule is completely free and they don't have anywhere they need to go.
+7. SUPPORTED APP ACTIONS & MUTATION SCHEMAS:
    Orbit is a comprehensive assistant that can control anything in the app across settings, tasks, projects, routines, and activity logging.
    When the user commands an action, populate "proposedMutations" with the corresponding schema:
    a. UPDATE_PREFERENCE:

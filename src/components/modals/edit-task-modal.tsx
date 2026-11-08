@@ -22,7 +22,7 @@ export interface EditableTaskShape {
 export function EditTaskModal({
   task,
   lifeAreas,
-  triggerClassName = "btn btn-ghost btn-xs gap-1",
+  triggerClassName = "btn btn-ghost btn-sm btn-square",
   triggerLabel,
 }: {
   task: EditableTaskShape;
@@ -71,7 +71,7 @@ export function EditTaskModal({
         className={triggerClassName}
         title="Edit task"
       >
-        <Pencil className="h-3.5 w-3.5" aria-hidden="true" />
+        <Pencil className="h-4 w-4" aria-hidden="true" />
         {triggerLabel && <span>{triggerLabel}</span>}
       </button>
 
