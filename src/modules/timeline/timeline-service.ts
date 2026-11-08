@@ -308,6 +308,16 @@ export async function getUnifiedTimelineData(
         colorToken: a.lifeArea?.colorToken ?? "slate",
       }));
 
+    // Deduplicate any rapid double-tap activities logged within 60 seconds
+    const deduplicatedActivities = dayActivities.filter((act, idx, arr) => {
+      const earlier = arr.slice(0, idx).find(
+        (prev) =>
+          prev.title === act.title &&
+          Math.abs(prev.startedAt.getTime() - act.startedAt.getTime()) < 60_000
+      );
+      return !earlier;
+    });
+
     return {
       dateStr: dStr,
       dayNameShort: dayNames[dPlain.dayOfWeek - 1] ?? "Day",
@@ -318,7 +328,7 @@ export async function getUnifiedTimelineData(
       locationContexts: dayLocations,
       scheduledCommitments: dayScheduled,
       availableWindows,
-      observedActivities: dayActivities,
+      observedActivities: deduplicatedActivities,
     };
   });
 

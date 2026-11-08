@@ -6,6 +6,7 @@ import { Check } from "lucide-react";
 import { completeTaskAction } from "@/app/actions/orbit-actions";
 import { AreaLabel, Card } from "@/components/ui/page";
 import { RescheduleTaskModal } from "@/components/modals/reschedule-task-modal";
+import { ActionSubmitButton } from "@/components/ui/action-button";
 import { useOrbitToast } from "@/components/ui/orbit-toast";
 import { formatDuration } from "@/lib/time/format";
 
@@ -131,14 +132,13 @@ export function TasksCard({
                   }}
                 >
                   <input type="hidden" name="taskId" value={task.id} />
-                  <button
-                    type="submit"
-                    aria-label={`Done ${task.title}`}
+                  <ActionSubmitButton
                     className="btn btn-secondary btn-sm"
+                    ariaLabel={`Done ${task.title}`}
+                    icon={<Check className="h-4 w-4" aria-hidden="true" />}
                   >
-                    <Check className="h-4 w-4" aria-hidden="true" />
-                    <span>Done</span>
-                  </button>
+                    Done
+                  </ActionSubmitButton>
                 </form>
               </div>
             </div>

@@ -220,12 +220,26 @@ export async function confirmTaskCompletion(
   });
   if (!task) throw new Error("Task not found");
 
+  // Idempotency guard: if the task is already completed, return immediately.
+  if (task.status === TaskStatus.COMPLETED) {
+    return task;
+  }
+
   const now = new Date();
   const durationMinutes = actualMinutes ?? task.estimatedMinutes ?? 30;
   const startedAt =
     task.startedAt ?? new Date(now.getTime() - durationMinutes * 60 * 1000);
 
   const completed = await prisma.$transaction(async (tx) => {
+    // Re-verify task inside transaction to eliminate race conditions
+    const current = await tx.task.findUnique({
+      where: { id: task.id },
+      select: { status: true },
+    });
+    if (current?.status === TaskStatus.COMPLETED) {
+      return task;
+    }
+
     const updatedTask = await tx.task.update({
       where: { id: task.id },
       data: {
@@ -235,21 +249,31 @@ export async function confirmTaskCompletion(
       },
     });
 
-    await tx.activityRecord.create({
-      data: {
-        userId,
-        lifeAreaId: task.lifeAreaId,
-        projectId: task.projectId,
-        milestoneId: task.milestoneId,
+    // Check if an activity record for this completion already exists
+    const existingRecord = await tx.activityRecord.findFirst({
+      where: {
         taskId: task.id,
-        title: `Completed: ${task.title}`,
-        startedAt,
-        endedAt: now,
-        durationMinutes,
         source: ActivitySource.TASK_COMPLETION,
-        isConfirmed: true,
       },
     });
+
+    if (!existingRecord) {
+      await tx.activityRecord.create({
+        data: {
+          userId,
+          lifeAreaId: task.lifeAreaId,
+          projectId: task.projectId,
+          milestoneId: task.milestoneId,
+          taskId: task.id,
+          title: `Completed: ${task.title}`,
+          startedAt,
+          endedAt: now,
+          durationMinutes,
+          source: ActivitySource.TASK_COMPLETION,
+          isConfirmed: true,
+        },
+      });
+    }
 
     await syncTaskWorkflowJobsTx(tx, {
       userId,

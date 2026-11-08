@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from "next";
+import NextTopLoader from "nextjs-toploader";
 import { OrbitToastProvider } from "@/components/ui/orbit-toast";
 import { ServiceWorkerRegistrar } from "@/components/shell/service-worker-registrar";
 import "./globals.css";
@@ -38,6 +39,16 @@ export default function RootLayout({
   return (
     <html lang="en" data-theme="orbit">
       <body className="min-h-dvh">
+        <NextTopLoader
+          color="#14171c"
+          initialPosition={0.15}
+          crawlSpeed={150}
+          height={2.5}
+          crawl={true}
+          showSpinner={false}
+          easing="ease"
+          speed={200}
+        />
         <OrbitToastProvider>
           <ServiceWorkerRegistrar />
           {children}

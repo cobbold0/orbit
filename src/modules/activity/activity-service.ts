@@ -138,12 +138,28 @@ export async function logExplicitActivityCheckIn(
     if (proj) validProjId = proj.id;
   }
 
+  const cleanTitle = input.title.trim();
+
+  // Deduplicate rapid double submissions (within 10 seconds with identical title)
+  const recentDuplicate = await prisma.activityRecord.findFirst({
+    where: {
+      userId,
+      title: cleanTitle,
+      createdAt: {
+        gte: new Date(Date.now() - 10_000),
+      },
+    },
+  });
+  if (recentDuplicate) {
+    return recentDuplicate;
+  }
+
   return prisma.activityRecord.create({
     data: {
       userId,
       lifeAreaId: validAreaId,
       projectId: validProjId,
-      title: input.title.trim(),
+      title: cleanTitle,
       physicalLocation: input.physicalLocation?.trim() || null,
       startedAt,
       endedAt: now,

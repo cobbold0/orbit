@@ -9,6 +9,7 @@ import { OrbitShell } from "@/components/shell/orbit-shell";
 import { AreaDot, AreaLabel, Card, PageHeader } from "@/components/ui/page";
 import { RescheduleTaskModal } from "@/components/modals/reschedule-task-modal";
 import { ScheduleWindowModal } from "@/components/modals/schedule-window-modal";
+import { ActionSubmitButton } from "@/components/ui/action-button";
 import { formatDuration, formatLongDate } from "@/lib/time/format";
 import { completeTaskAction } from "@/app/actions/orbit-actions";
 import { prisma } from "@/lib/db/prisma";
@@ -224,14 +225,13 @@ export default async function TimelinePage({ searchParams }: TimelinePageProps) 
                                 name="taskId"
                                 value={item.task.id}
                               />
-                              <button
-                                type="submit"
-                                aria-label={`Done ${item.task.title}`}
+                              <ActionSubmitButton
                                 className="btn btn-secondary btn-sm"
+                                ariaLabel={`Done ${item.task.title}`}
+                                icon={<Check className="h-4 w-4" aria-hidden="true" />}
                               >
-                                <Check className="h-4 w-4" aria-hidden="true" />
-                                <span>Done</span>
-                              </button>
+                                Done
+                              </ActionSubmitButton>
                             </form>
                           </div>
                         )}

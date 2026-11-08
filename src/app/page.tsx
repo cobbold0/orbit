@@ -12,6 +12,7 @@ import { ConversationalPlanner } from "@/components/planning/conversational-plan
 import { AreaLabel, Card } from "@/components/ui/page";
 import { RescheduleTaskModal } from "@/components/modals/reschedule-task-modal";
 import { LogActivityModal } from "@/components/modals/activity-modals";
+import { ActionSubmitButton } from "@/components/ui/action-button";
 import {
   formatClock,
   formatClockRange,
@@ -275,10 +276,12 @@ export default async function TodayPage() {
                 <div className="orbit-row-actions">
                   <form action={completeTaskAction}>
                     <input type="hidden" name="taskId" value={task.id} />
-                    <button type="submit" className="btn btn-primary btn-sm">
-                      <Check className="h-4 w-4" aria-hidden="true" />
-                      <span>Completed</span>
-                    </button>
+                    <ActionSubmitButton
+                      className="btn btn-primary btn-sm"
+                      icon={<Check className="h-4 w-4" aria-hidden="true" />}
+                    >
+                      Completed
+                    </ActionSubmitButton>
                   </form>
                   <form action={recoverOrRescheduleTaskAction}>
                     <input type="hidden" name="taskId" value={task.id} />
@@ -287,9 +290,9 @@ export default async function TodayPage() {
                       name="recoveryKind"
                       value="STILL_WORKING_30M"
                     />
-                    <button type="submit" className="btn btn-secondary btn-sm">
+                    <ActionSubmitButton className="btn btn-secondary btn-sm">
                       +30 min
-                    </button>
+                    </ActionSubmitButton>
                   </form>
                   <RescheduleTaskModal
                     taskId={task.id}
@@ -370,26 +373,24 @@ export default async function TodayPage() {
                     {task.status !== "IN_PROGRESS" && (
                       <form action={startTaskAction}>
                         <input type="hidden" name="taskId" value={task.id} />
-                        <button
-                          type="submit"
-                          aria-label={`Start ${task.title}`}
+                        <ActionSubmitButton
                           className="btn btn-secondary btn-sm"
+                          ariaLabel={`Start ${task.title}`}
+                          icon={<Play className="h-4 w-4" aria-hidden="true" />}
                         >
-                          <Play className="h-4 w-4" aria-hidden="true" />
-                          <span>Start</span>
-                        </button>
+                          Start
+                        </ActionSubmitButton>
                       </form>
                     )}
                     <form action={completeTaskAction}>
                       <input type="hidden" name="taskId" value={task.id} />
-                      <button
-                        type="submit"
-                        aria-label={`Done ${task.title}`}
+                      <ActionSubmitButton
                         className="btn btn-primary btn-sm"
+                        ariaLabel={`Done ${task.title}`}
+                        icon={<Check className="h-4 w-4" aria-hidden="true" />}
                       >
-                        <Check className="h-4 w-4" aria-hidden="true" />
-                        <span>Done</span>
-                      </button>
+                        Done
+                      </ActionSubmitButton>
                     </form>
                   </div>
                 </div>
@@ -443,23 +444,19 @@ export default async function TodayPage() {
                   />
                   <form action={startTaskAction}>
                     <input type="hidden" name="taskId" value={task.id} />
-                    <button
-                      type="submit"
-                      aria-label={`Start ${task.title}`}
+                    <ActionSubmitButton
                       className="btn btn-ghost btn-sm btn-square"
-                    >
-                      <Play className="h-4 w-4" aria-hidden="true" />
-                    </button>
+                      ariaLabel={`Start ${task.title}`}
+                      icon={<Play className="h-4 w-4" aria-hidden="true" />}
+                    />
                   </form>
                   <form action={completeTaskAction}>
                     <input type="hidden" name="taskId" value={task.id} />
-                    <button
-                      type="submit"
-                      aria-label={`Mark ${task.title} done`}
+                    <ActionSubmitButton
                       className="btn btn-secondary btn-sm btn-square"
-                    >
-                      <Check className="h-4 w-4" aria-hidden="true" />
-                    </button>
+                      ariaLabel={`Mark ${task.title} done`}
+                      icon={<Check className="h-4 w-4" aria-hidden="true" />}
+                    />
                   </form>
                 </div>
               </div>
