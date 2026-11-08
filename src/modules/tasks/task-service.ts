@@ -29,10 +29,15 @@ export async function createTaskWithQuickCapture(
   const ianaTimeZone = pref?.ianaTimeZone ?? "Africa/Lagos";
   const reminderMin = pref?.defaultPreTaskReminderMin ?? 30;
   const parsed = parseQuickCaptureInput(rawInput, lifeAreas, ianaTimeZone);
-  const targetAreaId =
+  let targetAreaId =
     overrideLifeAreaId && overrideLifeAreaId.length > 0
       ? overrideLifeAreaId
       : parsed.lifeAreaId || lifeAreas[0]?.id;
+
+  // Validate that targetAreaId belongs to user
+  if (!lifeAreas.some((a) => a.id === targetAreaId)) {
+    targetAreaId = lifeAreas[0]?.id;
+  }
 
   if (!targetAreaId) {
     throw new Error("At least one Life Area is required to create a task.");
@@ -108,13 +113,44 @@ export async function createStructuredTask(
   const pref = await prisma.userPreference.findUnique({ where: { userId } });
   const reminderMin = pref?.defaultPreTaskReminderMin ?? 30;
 
+  // Validate that the life area belongs to the user
+  const area = await prisma.lifeArea.findFirst({
+    where: { id: input.lifeAreaId, userId },
+    select: { id: true },
+  });
+  if (!area) {
+    throw new Error("Invalid life area or unauthorized");
+  }
+
+  // Validate project if supplied
+  let validProjectId: string | null = null;
+  let validMilestoneId: string | null = null;
+  if (input.projectId) {
+    const proj = await prisma.project.findFirst({
+      where: { id: input.projectId, userId, lifeAreaId: area.id },
+      select: { id: true },
+    });
+    if (!proj) {
+      throw new Error("Invalid project or unauthorized");
+    }
+    validProjectId = proj.id;
+
+    if (input.milestoneId) {
+      const ms = await prisma.projectMilestone.findFirst({
+        where: { id: input.milestoneId, projectId: proj.id },
+        select: { id: true },
+      });
+      if (ms) validMilestoneId = ms.id;
+    }
+  }
+
   const created = await prisma.$transaction(async (tx) => {
     const task = await tx.task.create({
       data: {
         userId,
-        lifeAreaId: input.lifeAreaId,
-        projectId: input.projectId || null,
-        milestoneId: input.milestoneId || null,
+        lifeAreaId: area.id,
+        projectId: validProjectId,
+        milestoneId: validMilestoneId,
         title: input.title.trim(),
         description: input.description?.trim() || null,
         commitmentType: input.commitmentType,

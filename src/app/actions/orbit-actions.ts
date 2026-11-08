@@ -58,6 +58,7 @@ import {
   updateUserPreferences,
 } from "@/modules/notifications/notification-service";
 import { sendPushToUserDevices } from "@/lib/push/web-push";
+import { checkRateLimit } from "@/lib/security/rate-limit";
 import { evaluateUserRoutineIntelligence } from "@/modules/routines/routine-intelligence";
 
 function revalidateAllOrbitViews() {
@@ -504,6 +505,12 @@ export async function resolveSuggestedRoutineAction(formData: FormData) {
 
 export async function captureMemoryInboxAction(formData: FormData) {
   const userId = await requireUserId();
+
+  const rateCheck = checkRateLimit(`${userId}:capture_memory`, 30, 60_000);
+  if (!rateCheck.success) {
+    throw new Error("Rate limit exceeded for memory capture. Please wait a moment.");
+  }
+
   const title = String(formData.get("title") ?? "").trim() || null;
   const rawContent = String(formData.get("rawContent") ?? "").trim();
   const captureKind =
@@ -517,6 +524,9 @@ export async function captureMemoryInboxAction(formData: FormData) {
   const consentConfirmed = formData.get("consentConfirmed") !== "false";
 
   if (!rawContent) return;
+  if (rawContent.length > 20_000) {
+    throw new Error("Content exceeds maximum allowed size (20,000 characters).");
+  }
 
   await captureAndProcessMemoryEntry(userId, {
     title,
@@ -575,8 +585,31 @@ export async function askOrbitPlannerAction(
   userMessage: string
 ): Promise<ConversationalPlanResponse> {
   const userId = await requireUserId();
+
+  const rateCheck = checkRateLimit(`${userId}:ask_planner`, 20, 60_000);
+  if (!rateCheck.success) {
+    return {
+      replyMarkdown: "You are sending messages too quickly. Please wait a minute before asking Orbit again.",
+      citedFacts: [],
+      assumptionsOrSuggestions: ["Rate limit reached. Please wait before retrying."],
+      proposedMutations: [],
+      providerUsed: "DETERMINISTIC_FALLBACK",
+    };
+  }
+
+  const trimmed = userMessage.trim();
+  if (trimmed.length > 2_500) {
+    return {
+      replyMarkdown: "Your message is too long (limit is 2,500 characters). Please provide a more concise request.",
+      citedFacts: [],
+      assumptionsOrSuggestions: ["Input message exceeds maximum character count."],
+      proposedMutations: [],
+      providerUsed: "DETERMINISTIC_FALLBACK",
+    };
+  }
+
   const context = await retrieveUserOrbitContext(userId);
-  return aiGateway.planWithContext(userMessage, context);
+  return aiGateway.planWithContext(trimmed, context);
 }
 
 export async function applyProposedMutationAction(
@@ -669,7 +702,18 @@ export async function transcribeAudioBase64Action(
   audioBase64: string,
   mimeType: string
 ): Promise<{ transcript: string; providerUsed: string }> {
-  await requireUserId();
+  const userId = await requireUserId();
+
+  const rateCheck = checkRateLimit(`${userId}:transcribe_audio`, 10, 60_000);
+  if (!rateCheck.success) {
+    throw new Error("Audio transcription rate limit reached. Please wait a minute before recording again.");
+  }
+
+  // Cap audio payload at ~15MB base64 string
+  if (audioBase64.length > 20_000_000) {
+    throw new Error("Audio recording is too large. Please record a shorter clip.");
+  }
+
   return aiGateway.transcribeAudioNote(audioBase64, mimeType);
 }
 

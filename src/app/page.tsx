@@ -1,10 +1,7 @@
 import Link from "next/link";
 import {
   ArrowRight,
-  Bell,
-  Calendar,
   Check,
-  Clock,
   MapPin,
   Play,
 } from "lucide-react";

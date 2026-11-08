@@ -10,7 +10,6 @@ import {
   Send,
   Smartphone,
   Trash2,
-  User,
 } from "lucide-react";
 import { signOut } from "@/lib/auth/auth-client";
 import {
@@ -174,10 +173,10 @@ export function SettingsClient({
       const detected = Intl.DateTimeFormat().resolvedOptions().timeZone;
       if (detected) {
         setTimeZone(detected);
-        notify(`Zone set to ${detected}`);
+        notify(`Zone set to ${detected}`, "success");
       }
     } catch {
-      notify("Could not read browser time zone");
+      notify("Could not read browser time zone", "error");
     }
   }
 
@@ -195,7 +194,7 @@ export function SettingsClient({
     try {
       const res = await triggerProactiveCheckInAction(kind);
       testModalRef.current?.close();
-      notify(res.message);
+      notify(res.message, res.ok ? "success" : "error");
       setTab("checkins");
       router.refresh();
     } finally {
@@ -205,7 +204,7 @@ export function SettingsClient({
 
   async function enablePushOnDevice() {
     if (!vapidPublicKey) {
-      notify("Push keys are not configured.");
+      notify("Push keys are not configured.", "error");
       return;
     }
     setIsSubscribingPush(true);
@@ -213,7 +212,7 @@ export function SettingsClient({
       const permission = await Notification.requestPermission();
       setPushSupportState(permission);
       if (permission !== "granted") {
-        notify("Notification permission was not granted.");
+        notify("Notification permission was not granted.", "error");
         return;
       }
 
@@ -236,7 +235,7 @@ export function SettingsClient({
 
       const subJson = subscription.toJSON();
       if (!subJson.endpoint || !subJson.keys?.p256dh || !subJson.keys?.auth) {
-        notify("Browser did not return valid push keys.");
+        notify("Browser did not return valid push keys.", "error");
         return;
       }
 
@@ -256,13 +255,13 @@ export function SettingsClient({
       });
 
       if (response.ok) {
-        notify("Push enabled on this browser");
+        notify("Push enabled on this browser", "success");
         router.refresh();
       } else {
-        notify("Could not save push subscription");
+        notify("Could not save push subscription", "error");
       }
     } catch {
-      notify("Could not enable push on this browser");
+      notify("Could not enable push on this browser", "error");
     } finally {
       setIsSubscribingPush(false);
     }
@@ -273,11 +272,11 @@ export function SettingsClient({
     try {
       const res = await sendTestWebPushAction();
       if (res.delivered > 0) {
-        notify(`Sent push to ${res.delivered} ${res.delivered === 1 ? "device" : "devices"}`);
+        notify(`Sent push to ${res.delivered} ${res.delivered === 1 ? "device" : "devices"}`, "success");
       } else if (res.attempted === 0) {
-        notify("Enable push on a device first");
+        notify("Enable push on a device first", "info");
       } else {
-        notify("Subscription expired or key updated. Click Enable on this browser to reconnect.");
+        notify("Subscription expired or key updated. Click Enable on this browser to reconnect.", "error");
       }
       router.refresh();
     } finally {

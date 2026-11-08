@@ -119,11 +119,30 @@ export async function logExplicitActivityCheckIn(
   const duration = input.durationMinutes ?? 45;
   const startedAt = new Date(now.getTime() - duration * 60 * 1000);
 
+  let validAreaId: string | null = null;
+  let validProjId: string | null = null;
+
+  if (input.lifeAreaId) {
+    const area = await prisma.lifeArea.findFirst({
+      where: { id: input.lifeAreaId, userId },
+      select: { id: true },
+    });
+    if (area) validAreaId = area.id;
+  }
+
+  if (input.projectId) {
+    const proj = await prisma.project.findFirst({
+      where: { id: input.projectId, userId },
+      select: { id: true },
+    });
+    if (proj) validProjId = proj.id;
+  }
+
   return prisma.activityRecord.create({
     data: {
       userId,
-      lifeAreaId: input.lifeAreaId || null,
-      projectId: input.projectId || null,
+      lifeAreaId: validAreaId,
+      projectId: validProjId,
       title: input.title.trim(),
       physicalLocation: input.physicalLocation?.trim() || null,
       startedAt,
@@ -227,10 +246,19 @@ export async function createDeclaredRoutine(
     physicalLocation?: string | null;
   }
 ) {
+  let validAreaId: string | null = null;
+  if (input.lifeAreaId) {
+    const area = await prisma.lifeArea.findFirst({
+      where: { id: input.lifeAreaId, userId },
+      select: { id: true },
+    });
+    if (area) validAreaId = area.id;
+  }
+
   return prisma.routine.create({
     data: {
       userId,
-      lifeAreaId: input.lifeAreaId || null,
+      lifeAreaId: validAreaId,
       title: input.title.trim(),
       kind: input.kind ?? RoutineKind.WORK_BLOCK,
       state: RoutineState.DECLARED,

@@ -127,7 +127,7 @@ export class DeterministicFallbackProvider implements AIProvider {
 
       const { slug, projectId } = matchAreaAndProject(clause);
       let classification: CandidateActionItem["classification"] = "AGREED_TO_DO";
-      let suggestedCommitment: CandidateActionItem["suggestedCommitment"] =
+      const suggestedCommitment: CandidateActionItem["suggestedCommitment"] =
         "FLEXIBLE";
       let waitingOnTarget: string | null = null;
 

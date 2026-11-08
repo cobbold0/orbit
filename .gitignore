@@ -10,6 +10,7 @@ build/
 
 # Environment variables
 .env
+.env.*
 .env*.local
 !.env.example
 .orbit-vapid.json

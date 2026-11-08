@@ -1,15 +1,18 @@
 "use client";
 
 import React, { createContext, useCallback, useContext, useState } from "react";
-import { Check } from "lucide-react";
+import { AlertCircle, Check, Info } from "lucide-react";
+
+export type ToastVariant = "success" | "error" | "info";
 
 interface ToastItem {
   id: number;
   message: string;
+  variant: ToastVariant;
 }
 
 interface OrbitToastContextValue {
-  notify: (message: string) => void;
+  notify: (message: string, variant?: ToastVariant) => void;
 }
 
 const OrbitToastContext = createContext<OrbitToastContextValue>({
@@ -23,9 +26,9 @@ export function useOrbitToast() {
 export function OrbitToastProvider({ children }: { children: React.ReactNode }) {
   const [toasts, setToasts] = useState<ToastItem[]>([]);
 
-  const notify = useCallback((message: string) => {
+  const notify = useCallback((message: string, variant: ToastVariant = "success") => {
     const id = Date.now() + Math.random();
-    setToasts((prev) => [...prev, { id, message }]);
+    setToasts((prev) => [...prev, { id, message, variant }]);
     setTimeout(() => {
       setToasts((prev) => prev.filter((t) => t.id !== id));
     }, 3200);
@@ -42,9 +45,15 @@ export function OrbitToastProvider({ children }: { children: React.ReactNode }) 
           {toasts.map((t) => (
             <div
               key={t.id}
-              className="alert bg-neutral text-neutral-content rounded-xl border-0 px-4 py-3 shadow-lg"
+              className="alert bg-neutral text-neutral-content rounded-xl border-0 px-4 py-3 shadow-lg flex items-center gap-2"
             >
-              <Check className="h-4 w-4 shrink-0" aria-hidden="true" />
+              {t.variant === "error" ? (
+                <AlertCircle className="h-4 w-4 shrink-0 text-red-400" aria-hidden="true" />
+              ) : t.variant === "info" ? (
+                <Info className="h-4 w-4 shrink-0 text-sky-400" aria-hidden="true" />
+              ) : (
+                <Check className="h-4 w-4 shrink-0 text-emerald-400" aria-hidden="true" />
+              )}
               <span className="text-[0.9375rem] font-medium">{t.message}</span>
             </div>
           ))}

@@ -246,6 +246,14 @@ export async function createProjectOrJourney(
     initialMilestones?: string[];
   }
 ) {
+  const area = await prisma.lifeArea.findFirst({
+    where: { id: input.lifeAreaId, userId },
+    select: { id: true },
+  });
+  if (!area) {
+    throw new Error("Life area not found or unauthorized");
+  }
+
   const maxSort = await prisma.project.aggregate({
     where: { userId },
     _max: { sortOrder: true },
@@ -254,7 +262,7 @@ export async function createProjectOrJourney(
   return prisma.project.create({
     data: {
       userId,
-      lifeAreaId: input.lifeAreaId,
+      lifeAreaId: area.id,
       title: input.title.trim(),
       description: input.description?.trim() || null,
       contextNote: input.contextNote?.trim() || null,
