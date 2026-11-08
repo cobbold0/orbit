@@ -205,12 +205,18 @@ export function SettingsClient({
       await navigator.serviceWorker.ready;
 
       const existing = await registration.pushManager.getSubscription();
-      const subscription =
-        existing ??
-        (await registration.pushManager.subscribe({
-          userVisibleOnly: true,
-          applicationServerKey: urlBase64ToUint8Array(vapidPublicKey),
-        }));
+      if (existing) {
+        try {
+          await existing.unsubscribe();
+        } catch {
+          // Continue to subscribe with current applicationServerKey
+        }
+      }
+
+      const subscription = await registration.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array(vapidPublicKey),
+      });
 
       const subJson = subscription.toJSON();
       if (!subJson.endpoint || !subJson.keys?.p256dh || !subJson.keys?.auth) {
@@ -255,8 +261,9 @@ export function SettingsClient({
       } else if (res.attempted === 0) {
         notify("Enable push on a device first");
       } else {
-        notify("Push endpoint did not accept delivery");
+        notify("Subscription expired or key updated. Click Enable on this browser to reconnect.");
       }
+      router.refresh();
     } finally {
       setIsSendingTestPush(false);
     }

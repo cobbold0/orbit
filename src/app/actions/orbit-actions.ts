@@ -806,6 +806,7 @@ export async function triggerProactiveCheckInAction(
 export async function sendTestWebPushAction(): Promise<{
   attempted: number;
   delivered: number;
+  deactivated: number;
 }> {
   const userId = await requireUserId();
   const res = await sendPushToUserDevices(userId, {
@@ -815,7 +816,11 @@ export async function sendTestWebPushAction(): Promise<{
     tag: "orbit-push-test",
   });
   revalidatePath("/settings");
-  return { attempted: res.attempted, delivered: res.delivered };
+  return {
+    attempted: res.attempted,
+    delivered: res.delivered,
+    deactivated: res.deactivated,
+  };
 }
 
 export async function removePushSubscriptionAction(formData: FormData) {

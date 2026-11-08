@@ -152,7 +152,18 @@ export async function sendPushToUserDevices(
           typeof err === "object" && err !== null && "statusCode" in err
             ? Number((err as { statusCode?: number }).statusCode)
             : 0;
-        if (statusCode === 404 || statusCode === 410) {
+        console.error(
+          `[WebPush] Delivery failed for subscription ${sub.id}: status=${statusCode}`,
+          err
+        );
+        // 404/410: endpoint unregistered/gone
+        // 401/403: VAPID credentials mismatch or unauthorized subscription
+        if (
+          statusCode === 404 ||
+          statusCode === 410 ||
+          statusCode === 401 ||
+          statusCode === 403
+        ) {
           deactivated += 1;
           await prisma.pushSubscription.update({
             where: { id: sub.id },
