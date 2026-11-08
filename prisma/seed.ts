@@ -15,6 +15,7 @@ import {
   TaskPriority,
   TaskStatus,
 } from "@prisma/client";
+import { hashPassword } from "better-auth/crypto";
 
 const prisma = new PrismaClient();
 
@@ -29,6 +30,24 @@ async function main() {
       name: "Alex Vance",
       email: "alex@orbit.local",
       emailVerified: true,
+    },
+  });
+
+  const hashedPassword = await hashPassword("password123");
+  await prisma.account.upsert({
+    where: { id: "account_orbit_primary" },
+    update: {
+      password: hashedPassword,
+      providerId: "credential",
+      accountId: user.id,
+      userId: user.id,
+    },
+    create: {
+      id: "account_orbit_primary",
+      accountId: user.id,
+      providerId: "credential",
+      userId: user.id,
+      password: hashedPassword,
     },
   });
 

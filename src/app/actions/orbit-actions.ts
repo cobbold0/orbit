@@ -842,4 +842,58 @@ export async function evaluateRoutinesNowAction(): Promise<{
   return res;
 }
 
+export async function initializeNewUserWorkspaceAction(input?: {
+  clientTimeZone?: string;
+}) {
+  const userId = await requireUserId();
+  const timeZone = input?.clientTimeZone || "Africa/Lagos";
+
+  await prisma.userPreference.upsert({
+    where: { userId },
+    update: { ianaTimeZone: timeZone },
+    create: {
+      userId,
+      ianaTimeZone: timeZone,
+      morningBriefingEnabled: true,
+      morningBriefingTime: "07:30",
+      declaredWakeTime: "07:00",
+      declaredSleepTime: "23:00",
+      quietHoursEnabled: true,
+      quietHoursStart: "22:30",
+      quietHoursEnd: "07:00",
+      maxDailyCheckIns: 5,
+      defaultPreTaskReminderMin: 30,
+      randomCheckInsEnabled: true,
+      checkInFrequency: "BALANCED",
+      minMinutesBetweenCheckIns: 120,
+    },
+  });
+
+  const existingAreas = await prisma.lifeArea.count({ where: { userId } });
+  if (existingAreas === 0) {
+    await prisma.lifeArea.createMany({
+      data: [
+        {
+          userId,
+          name: "Work",
+          slug: "work",
+          description: "Professional projects and career commitments",
+          colorToken: "#2563eb",
+          sortOrder: 0,
+        },
+        {
+          userId,
+          name: "Personal",
+          slug: "personal",
+          description: "Health, family, habits and personal growth",
+          colorToken: "#059669",
+          sortOrder: 1,
+        },
+      ],
+    });
+  }
+
+  revalidateAllOrbitViews();
+}
+
 

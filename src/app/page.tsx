@@ -63,6 +63,10 @@ export default async function TodayPage() {
       projects={data.projects}
       unreviewedInboxCount={pendingActions}
       unreadCheckInCount={data.activeCheckIns.length}
+      user={{
+        name: user.name,
+        email: user.email,
+      }}
     >
       <div className="page">
         <PageHeader

@@ -6,10 +6,13 @@ import { useRouter } from "next/navigation";
 import {
   Bell,
   Check,
+  LogOut,
   Send,
   Smartphone,
   Trash2,
+  User,
 } from "lucide-react";
+import { signOut } from "@/lib/auth/auth-client";
 import {
   removePushSubscriptionAction,
   respondToNotificationAction,
@@ -88,13 +91,18 @@ function urlBase64ToUint8Array(base64String: string): Uint8Array<ArrayBuffer> {
 }
 
 export function SettingsClient({
-  initialTab,
+  initialTab = "checkins",
+  user,
   preferences,
   notifications,
   pushDevices,
   vapidPublicKey,
 }: {
-  initialTab: "checkins" | "preferences";
+  initialTab?: "checkins" | "preferences" | "account";
+  user?: {
+    name: string;
+    email: string;
+  } | null;
   preferences: SettingsPreferenceShape;
   notifications: SettingsNotificationItem[];
   pushDevices: SettingsPushDeviceItem[];
@@ -105,7 +113,15 @@ export function SettingsClient({
   const { notify } = useOrbitToast();
   const testModalRef = useRef<HTMLDialogElement | null>(null);
 
-  const [tab, setTab] = useState<"checkins" | "preferences">(initialTab);
+  const [tab, setTab] = useState<"checkins" | "preferences" | "account">(initialTab);
+
+  async function handleSignOut() {
+    try {
+      await signOut();
+    } finally {
+      window.location.href = "/sign-in";
+    }
+  }
   const [timeZone, setTimeZone] = useState<string>(preferences.ianaTimeZone);
   const [morningEnabled, setMorningEnabled] = useState<boolean>(
     preferences.morningBriefingEnabled
@@ -272,7 +288,16 @@ export function SettingsClient({
   return (
     <div className="page">
       <PageHeader title="Settings">
-        {tab === "checkins" ? (
+        {tab === "account" ? (
+          <button
+            type="button"
+            onClick={handleSignOut}
+            className="btn btn-outline btn-error btn-sm sm:btn-md"
+          >
+            <LogOut className="h-4 w-4" aria-hidden="true" />
+            <span>Sign out</span>
+          </button>
+        ) : tab === "checkins" ? (
           <button
             type="button"
             onClick={openTestCheckInModal}
@@ -326,16 +351,62 @@ export function SettingsClient({
           >
             Preferences
           </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={tab === "account"}
+            onClick={() => setTab("account")}
+            className={`tab flex-1 font-medium sm:flex-initial sm:px-5 ${
+              tab === "account" ? "tab-active" : ""
+            }`}
+          >
+            Account
+          </button>
         </div>
 
         <p className="meta">
           {tab === "checkins"
             ? "Proactive briefings and commitment check-ins from Orbit."
-            : "Time zone, morning briefing, quiet hours, and push devices."}
+            : tab === "preferences"
+              ? "Time zone, morning briefing, quiet hours, and push devices."
+              : "User profile, email address, and authentication session."}
         </p>
       </div>
 
-      {tab === "checkins" ? (
+      {tab === "account" ? (
+        <Card title="Account details">
+          <div className="flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between py-1">
+            <div className="flex items-center gap-3.5">
+              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary font-bold text-base">
+                {user?.name ? user.name.slice(0, 2).toUpperCase() : "U"}
+              </div>
+              <div className="min-w-0">
+                <p className="text-base font-semibold text-base-content">
+                  {user?.name || "Orbit User"}
+                </p>
+                <p className="text-xs text-base-content/60">
+                  {user?.email || "No email"}
+                </p>
+                <div className="mt-1.5 flex items-center gap-1.5">
+                  <span className="badge badge-xs badge-success" />
+                  <span className="text-[0.6875rem] text-base-content/60 uppercase tracking-wider font-semibold">
+                    Signed in
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={handleSignOut}
+              className="btn btn-outline btn-error btn-sm gap-2 self-start sm:self-auto"
+            >
+              <LogOut className="h-4 w-4" aria-hidden="true" />
+              <span>Sign out</span>
+            </button>
+          </div>
+        </Card>
+      ) : tab === "checkins" ? (
         <Card title="Recent check-ins">
           {notifications.length === 0 ? (
             <div className="orbit-row">

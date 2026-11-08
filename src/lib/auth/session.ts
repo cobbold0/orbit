@@ -21,7 +21,7 @@ export async function getCurrentUser() {
     // Fall through to demo user lookup if DB is unavailable or headers context missing
   }
 
-  if (process.env.NODE_ENV !== "production" && process.env.ORBIT_DEMO_FALLBACK !== "false") {
+  if (process.env.ORBIT_DEMO_FALLBACK === "true") {
     try {
       const demoUser = await prisma.user.findFirst({
         orderBy: { createdAt: "asc" },

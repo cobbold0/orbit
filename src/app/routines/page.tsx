@@ -97,6 +97,10 @@ export default async function ActivityPage() {
       projects={projects}
       unreviewedInboxCount={badges.unreviewedInboxCount}
       unreadCheckInCount={badges.unreadCheckInCount}
+      user={{
+        name: user.name,
+        email: user.email,
+      }}
     >
       <ActivityClient
         areaOptions={areaOptions}

@@ -72,6 +72,10 @@ export default async function AllProjectsPage({
       projects={shellProjects}
       unreviewedInboxCount={badges.unreviewedInboxCount}
       unreadCheckInCount={badges.unreadCheckInCount}
+      user={{
+        name: user.name,
+        email: user.email,
+      }}
     >
       <div className="page">
         <PageHeader

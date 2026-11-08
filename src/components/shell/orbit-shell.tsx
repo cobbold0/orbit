@@ -18,9 +18,13 @@ import {
   FileText,
   History,
   Layers,
+  LogOut,
+  MoreVertical,
   Plus,
   SlidersHorizontal,
+  User,
 } from "lucide-react";
+import { signOut } from "@/lib/auth/auth-client";
 import {
   createStructuredTaskAction,
   logActivityCheckInAction,
@@ -87,12 +91,19 @@ export function OpenCaptureButton({
   );
 }
 
+export interface ShellUser {
+  name?: string | null;
+  email?: string | null;
+  image?: string | null;
+}
+
 interface OrbitShellProps {
   children: React.ReactNode;
   lifeAreas: ShellLifeArea[];
   projects: ShellProject[];
   unreviewedInboxCount?: number;
   unreadCheckInCount?: number;
+  user?: ShellUser | null;
 }
 
 const NAV_ITEMS = [
@@ -111,6 +122,7 @@ export function OrbitShell({
   projects,
   unreviewedInboxCount = 0,
   unreadCheckInCount = 0,
+  user = null,
 }: OrbitShellProps) {
   const pathname = usePathname();
   const idBase = useId();
@@ -121,6 +133,14 @@ export function OrbitShell({
   const taskFormRef = useRef<HTMLFormElement | null>(null);
   const logFormRef = useRef<HTMLFormElement | null>(null);
   const { notify } = useOrbitToast();
+
+  async function handleSignOut() {
+    try {
+      await signOut();
+    } finally {
+      window.location.href = "/sign-in";
+    }
+  }
 
   const [tab, setTab] = useState<CaptureTabMode>("task");
   const [showMoreTaskOptions, setShowMoreTaskOptions] = useState(false);
@@ -242,7 +262,7 @@ export function OrbitShell({
             </ul>
           </nav>
 
-          <div className="mt-auto border-t border-base-300/70 pt-4">
+          <div className="mt-auto border-t border-base-300/70 pt-3 flex flex-col gap-1">
             <ul className="menu flex-nowrap w-full p-0 text-[0.9375rem]">
               <li>
                 <Link
@@ -276,6 +296,50 @@ export function OrbitShell({
                 </Link>
               </li>
             </ul>
+
+            {user && (
+              <div className="dropdown dropdown-top w-full">
+                <div
+                  tabIndex={0}
+                  role="button"
+                  className="flex w-full items-center gap-2.5 rounded-lg p-2 text-left hover:bg-base-200/60 transition-colors"
+                >
+                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary font-semibold text-xs">
+                    {user.name ? user.name.slice(0, 2).toUpperCase() : "U"}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-medium leading-tight text-base-content">
+                      {user.name || "User"}
+                    </p>
+                    <p className="truncate text-xs text-base-content/60 leading-tight">
+                      {user.email || ""}
+                    </p>
+                  </div>
+                  <MoreVertical className="h-4 w-4 shrink-0 text-base-content/40" />
+                </div>
+                <ul
+                  tabIndex={0}
+                  className="dropdown-content menu z-30 mb-2 w-52 rounded-box bg-base-100 p-1.5 shadow-md border border-base-300/70 text-sm"
+                >
+                  <li>
+                    <Link href="/settings?tab=account">
+                      <User className="h-4 w-4" />
+                      <span>Account details</span>
+                    </Link>
+                  </li>
+                  <li>
+                    <button
+                      type="button"
+                      onClick={handleSignOut}
+                      className="text-error hover:bg-error/10"
+                    >
+                      <LogOut className="h-4 w-4" />
+                      <span>Sign out</span>
+                    </button>
+                  </li>
+                </ul>
+              </div>
+            )}
           </div>
         </aside>
 
@@ -310,6 +374,15 @@ export function OrbitShell({
                   <SlidersHorizontal className="h-4 w-4" aria-hidden="true" />
                 )}
               </Link>
+              {user && (
+                <Link
+                  href="/settings?tab=account"
+                  aria-label="Account details"
+                  className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10 text-primary text-xs font-semibold"
+                >
+                  {user.name ? user.name.slice(0, 2).toUpperCase() : "U"}
+                </Link>
+              )}
               <button
                 type="button"
                 onClick={() => openCapture()}

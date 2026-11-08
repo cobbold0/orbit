@@ -28,12 +28,14 @@ export default async function SettingsPage({
     (n) => n.status === "DELIVERED"
   ).length;
 
-  const initialTab: "checkins" | "preferences" =
-    params.tab === "preferences"
-      ? "preferences"
-      : params.tab === "checkins" || unreadCheckInCount > 0
-        ? "checkins"
-        : "preferences";
+  const initialTab: "checkins" | "preferences" | "account" =
+    params.tab === "account"
+      ? "account"
+      : params.tab === "preferences"
+        ? "preferences"
+        : params.tab === "checkins" || unreadCheckInCount > 0
+          ? "checkins"
+          : "preferences";
 
   const notifications = data.notifications.map((n) => {
     const ts = n.deliveredAt ?? n.createdAt;
@@ -74,9 +76,17 @@ export default async function SettingsPage({
       projects={data.projects}
       unreviewedInboxCount={unreviewedInboxCount}
       unreadCheckInCount={unreadCheckInCount}
+      user={{
+        name: user.name,
+        email: user.email,
+      }}
     >
       <SettingsClient
         initialTab={initialTab}
+        user={{
+          name: user.name,
+          email: user.email,
+        }}
         preferences={{
           ianaTimeZone: data.preferences.ianaTimeZone,
           morningBriefingEnabled: data.preferences.morningBriefingEnabled,

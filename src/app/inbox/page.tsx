@@ -98,6 +98,10 @@ export default async function NotesPage() {
       projects={projects}
       unreviewedInboxCount={pendingTotal}
       unreadCheckInCount={unreadCheckInCount}
+      user={{
+        name: user.name,
+        email: user.email,
+      }}
     >
       <NotesClient
         entries={noteItems}

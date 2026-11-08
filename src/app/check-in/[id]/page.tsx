@@ -89,6 +89,10 @@ export default async function CheckInPage({
       projects={projects}
       unreviewedInboxCount={badges.unreviewedInboxCount}
       unreadCheckInCount={badges.unreadCheckInCount}
+      user={{
+        name: user.name,
+        email: user.email,
+      }}
     >
       <CheckInResponseClient
         checkIn={{

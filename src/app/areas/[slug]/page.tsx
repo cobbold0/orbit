@@ -115,6 +115,10 @@ export default async function SingleAreaPage({ params }: SingleAreaPageProps) {
       projects={allProjects}
       unreviewedInboxCount={badges.unreviewedInboxCount}
       unreadCheckInCount={badges.unreadCheckInCount}
+      user={{
+        name: user.name,
+        email: user.email,
+      }}
     >
       <div className="page">
         <PageHeader

@@ -76,6 +76,10 @@ export default async function AllTasksPage({
       projects={shellProjects}
       unreviewedInboxCount={badges.unreviewedInboxCount}
       unreadCheckInCount={badges.unreadCheckInCount}
+      user={{
+        name: user.name,
+        email: user.email,
+      }}
     >
       <div className="page">
         <PageHeader

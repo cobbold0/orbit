@@ -60,6 +60,10 @@ export default async function AreasPage() {
       projects={shellProjects}
       unreviewedInboxCount={badges.unreviewedInboxCount}
       unreadCheckInCount={badges.unreadCheckInCount}
+      user={{
+        name: user.name,
+        email: user.email,
+      }}
     >
       <div className="page">
         <PageHeader title="Areas">
