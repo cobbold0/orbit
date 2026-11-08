@@ -1,0 +1,244 @@
+import {
+  ActivitySource,
+  CommitmentType,
+  ScheduleChangeReason,
+  TaskPriority,
+  TaskStatus,
+} from "@prisma/client";
+import { prisma } from "@/lib/db/prisma";
+import { computeTaskScheduleTransition } from "./task-rules";
+import { parseQuickCaptureInput } from "./quick-capture-parser";
+
+export async function createTaskWithQuickCapture(
+  userId: string,
+  rawInput: string,
+  overrideLifeAreaId?: string
+) {
+  const [pref, lifeAreas] = await Promise.all([
+    prisma.userPreference.findUnique({ where: { userId } }),
+    prisma.lifeArea.findMany({
+      where: { userId, isArchived: false },
+      orderBy: { sortOrder: "asc" },
+    }),
+  ]);
+
+  const ianaTimeZone = pref?.ianaTimeZone ?? "Africa/Lagos";
+  const parsed = parseQuickCaptureInput(rawInput, lifeAreas, ianaTimeZone);
+  const targetAreaId =
+    overrideLifeAreaId && overrideLifeAreaId.length > 0
+      ? overrideLifeAreaId
+      : parsed.lifeAreaId || lifeAreas[0]?.id;
+
+  if (!targetAreaId) {
+    throw new Error("At least one Life Area is required to create a task.");
+  }
+
+  return prisma.task.create({
+    data: {
+      userId,
+      lifeAreaId: targetAreaId,
+      title: parsed.title,
+      commitmentType: parsed.commitmentType,
+      priority: parsed.priority,
+      estimatedMinutes: parsed.estimatedMinutes,
+      flexibilityWindow: parsed.flexibilityWindow,
+      scheduledStart: parsed.scheduledStart,
+      scheduledEnd: parsed.scheduledEnd,
+      dueDate: parsed.dueDate,
+      waitingOnPerson: parsed.waitingOnPerson,
+      waitingOnCondition: parsed.waitingOnCondition,
+      waitingSince:
+        parsed.commitmentType === CommitmentType.WAITING ? new Date() : null,
+    },
+  });
+}
+
+export async function createStructuredTask(
+  userId: string,
+  input: {
+    title: string;
+    description?: string;
+    lifeAreaId: string;
+    projectId?: string | null;
+    milestoneId?: string | null;
+    commitmentType: CommitmentType;
+    priority: TaskPriority;
+    estimatedMinutes?: number | null;
+    dueDate?: Date | null;
+    scheduledStart?: Date | null;
+    scheduledEnd?: Date | null;
+    flexibilityWindow?: string | null;
+    waitingOnPerson?: string | null;
+    waitingOnCondition?: string | null;
+  }
+) {
+  return prisma.task.create({
+    data: {
+      userId,
+      lifeAreaId: input.lifeAreaId,
+      projectId: input.projectId || null,
+      milestoneId: input.milestoneId || null,
+      title: input.title.trim(),
+      description: input.description?.trim() || null,
+      commitmentType: input.commitmentType,
+      priority: input.priority,
+      estimatedMinutes: input.estimatedMinutes ?? null,
+      dueDate: input.dueDate ?? null,
+      scheduledStart:
+        input.commitmentType === CommitmentType.SCHEDULED
+          ? (input.scheduledStart ?? null)
+          : null,
+      scheduledEnd:
+        input.commitmentType === CommitmentType.SCHEDULED
+          ? (input.scheduledEnd ?? null)
+          : null,
+      flexibilityWindow:
+        input.commitmentType === CommitmentType.FLEXIBLE
+          ? (input.flexibilityWindow ?? "THIS_WEEK")
+          : null,
+      waitingOnPerson:
+        input.commitmentType === CommitmentType.WAITING
+          ? (input.waitingOnPerson?.trim() || null)
+          : null,
+      waitingOnCondition:
+        input.commitmentType === CommitmentType.WAITING
+          ? (input.waitingOnCondition?.trim() || null)
+          : null,
+      waitingSince:
+        input.commitmentType === CommitmentType.WAITING ? new Date() : null,
+    },
+  });
+}
+
+export async function confirmTaskCompletion(
+  userId: string,
+  taskId: string,
+  actualMinutes?: number
+) {
+  const task = await prisma.task.findFirst({
+    where: { id: taskId, userId },
+  });
+  if (!task) throw new Error("Task not found");
+
+  const now = new Date();
+  const durationMinutes = actualMinutes ?? task.estimatedMinutes ?? 30;
+  const startedAt =
+    task.startedAt ?? new Date(now.getTime() - durationMinutes * 60 * 1000);
+
+  return prisma.$transaction(async (tx) => {
+    const updatedTask = await tx.task.update({
+      where: { id: task.id },
+      data: {
+        status: TaskStatus.COMPLETED,
+        completedAt: now,
+        scheduleVersion: { increment: 1 },
+      },
+    });
+
+    await tx.activityRecord.create({
+      data: {
+        userId,
+        lifeAreaId: task.lifeAreaId,
+        projectId: task.projectId,
+        milestoneId: task.milestoneId,
+        taskId: task.id,
+        title: `Completed: ${task.title}`,
+        startedAt,
+        endedAt: now,
+        durationMinutes,
+        source: ActivitySource.TASK_COMPLETION,
+        isConfirmed: true,
+      },
+    });
+
+    return updatedTask;
+  });
+}
+
+export async function markTaskStarted(userId: string, taskId: string) {
+  const task = await prisma.task.findFirst({
+    where: { id: taskId, userId },
+  });
+  if (!task) throw new Error("Task not found");
+
+  return prisma.task.update({
+    where: { id: task.id },
+    data: {
+      status: TaskStatus.IN_PROGRESS,
+      startedAt: new Date(),
+    },
+  });
+}
+
+export async function rescheduleOrChangeCommitment(
+  userId: string,
+  taskId: string,
+  input: {
+    newCommitmentType: CommitmentType;
+    newStart?: Date | null;
+    newEnd?: Date | null;
+    flexibilityWindow?: string | null;
+    waitingOnPerson?: string | null;
+    waitingOnCondition?: string | null;
+    reason: ScheduleChangeReason;
+    note?: string;
+  }
+) {
+  const task = await prisma.task.findFirst({
+    where: { id: taskId, userId },
+  });
+  if (!task) throw new Error("Task not found");
+
+  const transition = computeTaskScheduleTransition(
+    {
+      id: task.id,
+      commitmentType: task.commitmentType,
+      status: task.status,
+      scheduledStart: task.scheduledStart,
+      scheduledEnd: task.scheduledEnd,
+      scheduleVersion: task.scheduleVersion,
+      postponeCount: task.postponeCount,
+    },
+    {
+      newCommitmentType: input.newCommitmentType,
+      newStart: input.newStart,
+      newEnd: input.newEnd,
+      reason: input.reason,
+      note: input.note,
+    }
+  );
+
+  return prisma.$transaction(async (tx) => {
+    const updated = await tx.task.update({
+      where: { id: task.id },
+      data: {
+        ...transition.nextTaskState,
+        flexibilityWindow:
+          input.newCommitmentType === CommitmentType.FLEXIBLE
+            ? (input.flexibilityWindow ?? task.flexibilityWindow ?? "THIS_WEEK")
+            : null,
+        waitingOnPerson:
+          input.newCommitmentType === CommitmentType.WAITING
+            ? (input.waitingOnPerson ?? task.waitingOnPerson)
+            : null,
+        waitingOnCondition:
+          input.newCommitmentType === CommitmentType.WAITING
+            ? (input.waitingOnCondition ?? task.waitingOnCondition)
+            : null,
+        waitingSince:
+          input.newCommitmentType === CommitmentType.WAITING
+            ? new Date()
+            : null,
+      },
+    });
+
+    await tx.taskScheduleHistory.create({
+      data: {
+        taskId: task.id,
+        ...transition.historyEntry,
+      },
+    });
+
+    return updated;
+  });
+}

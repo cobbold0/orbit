@@ -1,0 +1,732 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+// ============================================================================
+// 1. AUTHENTICATION & USER IDENTITY (Better Auth Core + Orbit Preferences)
+// ============================================================================
+
+model User {
+  id            String    @id @default(cuid())
+  name          String
+  email         String    @unique
+  emailVerified Boolean   @default(false)
+  image         String?
+  createdAt     DateTime  @default(now()) @db.Timestamptz(6)
+  updatedAt     DateTime  @updatedAt @db.Timestamptz(6)
+
+  // Better Auth relations
+  sessions      Session[]
+  accounts      Account[]
+
+  // Orbit domain relations
+  preferences       UserPreference?
+  lifeAreas         LifeArea[]
+  projects          Project[]
+  tasks             Task[]
+  routines          Routine[]
+  activityRecords   ActivityRecord[]
+  memoryInbox       MemoryInboxEntry[]
+  notifications     Notification[]
+  pushSubscriptions PushSubscription[]
+  backgroundJobs    BackgroundJob[]
+  outboxEvents      OutboxEvent[]
+
+  @@map("user")
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  expiresAt DateTime @db.Timestamptz(6)
+  token     String   @unique
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @db.Timestamptz(6)
+  ipAddress String?
+  userAgent String?
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("session")
+}
+
+model Account {
+  id                    String    @id @default(cuid())
+  accountId             String
+  providerId            String
+  userId                String
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accessToken           String?
+  refreshToken          String?
+  idToken               String?
+  accessTokenExpiresAt  DateTime? @db.Timestamptz(6)
+  refreshTokenExpiresAt DateTime? @db.Timestamptz(6)
+  scope                 String?
+  password              String?
+  createdAt             DateTime  @default(now()) @db.Timestamptz(6)
+  updatedAt             DateTime  @updatedAt @db.Timestamptz(6)
+
+  @@index([userId])
+  @@map("account")
+}
+
+model Verification {
+  id         String    @id @default(cuid())
+  identifier String
+  value      String
+  expiresAt  DateTime  @db.Timestamptz(6)
+  createdAt  DateTime? @default(now()) @db.Timestamptz(6)
+  updatedAt  DateTime? @updatedAt @db.Timestamptz(6)
+
+  @@map("verification")
+}
+
+enum CheckInFrequency {
+  MINIMAL
+  BALANCED
+  PROACTIVE
+}
+
+model UserPreference {
+  id                        String           @id @default(cuid())
+  userId                    String           @unique
+  user                      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // IANA Time Zone (e.g., "Africa/Lagos", "Europe/London", "America/New_York")
+  ianaTimeZone              String           @default("UTC")
+
+  // Morning Briefing & Daily Rhythm (Wall-clock HH:mm in user's IANA time zone)
+  morningBriefingEnabled    Boolean          @default(true)
+  morningBriefingTime       String           @default("07:30")
+  declaredWakeTime          String           @default("07:00")
+  declaredSleepTime         String           @default("23:00")
+
+  // Quiet Hours & Interruption Controls
+  quietHoursEnabled         Boolean          @default(true)
+  quietHoursStart           String           @default("22:00")
+  quietHoursEnd             String           @default("07:00")
+  maxDailyCheckIns          Int              @default(6)
+  defaultPreTaskReminderMin Int              @default(30)
+
+  // Random Activity Check-Ins
+  randomCheckInsEnabled     Boolean          @default(true)
+  checkInFrequency          CheckInFrequency @default(BALANCED)
+  minMinutesBetweenCheckIns Int              @default(120)
+
+  createdAt                 DateTime         @default(now()) @db.Timestamptz(6)
+  updatedAt                 DateTime         @updatedAt @db.Timestamptz(6)
+
+  @@map("user_preference")
+}
+
+// ============================================================================
+// 2. LIFE AREAS, PROJECTS & JOURNEYS
+// ============================================================================
+
+model LifeArea {
+  id          String    @id @default(cuid())
+  userId      String
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  name        String
+  slug        String
+  description String?
+  // Semantic token key ("slate", "indigo", "emerald", "amber", "rose", "teal", "violet")
+  colorToken  String    @default("slate")
+  iconName    String    @default("CircleDot")
+  sortOrder   Int       @default(0)
+  isArchived  Boolean   @default(false)
+
+  createdAt   DateTime  @default(now()) @db.Timestamptz(6)
+  updatedAt   DateTime  @updatedAt @db.Timestamptz(6)
+  archivedAt  DateTime? @db.Timestamptz(6)
+
+  projects         Project[]
+  tasks            Task[]
+  routines         Routine[]
+  activityRecords  ActivityRecord[]
+  extractedActions ExtractedAction[]
+
+  @@unique([userId, slug])
+  @@index([userId, isArchived, sortOrder])
+  @@map("life_area")
+}
+
+enum ProjectKind {
+  PROJECT // Outcome-driven initiative (e.g., "Build attendance management system")
+  JOURNEY // Long-term progression through sequential milestones (e.g., "Learn music production")
+}
+
+enum ProjectStatus {
+  ACTIVE
+  PAUSED
+  COMPLETED
+  ARCHIVED
+}
+
+model Project {
+  id          String        @id @default(cuid())
+  userId      String
+  user        User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  lifeAreaId  String
+  lifeArea    LifeArea      @relation(fields: [lifeAreaId], references: [id], onDelete: Restrict)
+
+  title       String
+  description String?
+  contextNote String?
+  kind        ProjectKind   @default(PROJECT)
+  status      ProjectStatus @default(ACTIVE)
+  startDate   DateTime?     @db.Timestamptz(6)
+  targetDate  DateTime?     @db.Timestamptz(6)
+  sortOrder   Int           @default(0)
+
+  createdAt   DateTime      @default(now()) @db.Timestamptz(6)
+  updatedAt   DateTime      @updatedAt @db.Timestamptz(6)
+  completedAt DateTime?     @db.Timestamptz(6)
+
+  milestones       ProjectMilestone[]
+  tasks            Task[]
+  activityRecords  ActivityRecord[]
+  extractedActions ExtractedAction[]
+
+  @@index([userId, status])
+  @@index([userId, lifeAreaId])
+  @@map("project")
+}
+
+enum MilestoneStatus {
+  UPCOMING
+  IN_PROGRESS
+  COMPLETED
+}
+
+model ProjectMilestone {
+  id          String          @id @default(cuid())
+  projectId   String
+  project     Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  title       String
+  description String?
+  sortOrder   Int             @default(0)
+  status      MilestoneStatus @default(UPCOMING)
+  targetDate  DateTime?       @db.Timestamptz(6)
+  completedAt DateTime?       @db.Timestamptz(6)
+
+  createdAt   DateTime        @default(now()) @db.Timestamptz(6)
+  updatedAt   DateTime        @updatedAt @db.Timestamptz(6)
+
+  tasks           Task[]
+  activityRecords ActivityRecord[]
+
+  @@index([projectId, sortOrder])
+  @@map("project_milestone")
+}
+
+// ============================================================================
+// 3. TASKS, COMMITMENTS & SCHEDULE HISTORY
+// ============================================================================
+
+enum CommitmentType {
+  SCHEDULED // User committed to a specific time window
+  FLEXIBLE  // Needs completion, not bound to a calendar slot
+  WAITING   // Blocked on an external person, event, or condition
+}
+
+enum TaskStatus {
+  ACTIVE          // Ready or scheduled
+  IN_PROGRESS     // User confirmed they started working on it
+  NEEDS_CHECKIN   // Scheduled time passed without confirmation (never auto-completed!)
+  COMPLETED       // Explicitly confirmed complete
+  ARCHIVED        // Soft-removed / no longer relevant
+}
+
+enum TaskPriority {
+  LOW
+  NORMAL
+  HIGH
+  CRITICAL
+}
+
+model Task {
+  id                String         @id @default(cuid())
+  userId            String
+  user              User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  lifeAreaId        String
+  lifeArea          LifeArea       @relation(fields: [lifeAreaId], references: [id], onDelete: Restrict)
+  projectId         String?
+  project           Project?       @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  milestoneId       String?
+  milestone         ProjectMilestone? @relation(fields: [milestoneId], references: [id], onDelete: SetNull)
+
+  title             String
+  description       String?
+  contextNotes      String?
+  commitmentType    CommitmentType @default(FLEXIBLE)
+  status            TaskStatus     @default(ACTIVE)
+  priority          TaskPriority   @default(NORMAL)
+
+  // Duration & Deadlines (distinct from scheduled execution time!)
+  estimatedMinutes  Int?
+  dueDate           DateTime?      @db.Timestamptz(6)
+
+  // Scheduled Execution Window (populated when commitmentType == SCHEDULED)
+  scheduledStart    DateTime?      @db.Timestamptz(6)
+  scheduledEnd      DateTime?      @db.Timestamptz(6)
+
+  // Flexible & Waiting Metadata
+  flexibilityWindow String?        // e.g., "THIS_MORNING", "THIS_AFTERNOON", "THIS_EVENING", "THIS_WEEK", "WEEKEND"
+  waitingOnPerson   String?        // e.g., "Odoo Developer"
+  waitingOnCondition String?       // e.g., "Attendance API documentation"
+  waitingSince      DateTime?      @db.Timestamptz(6)
+
+  // Monotonically incremented whenever schedule or commitmentType changes.
+  // Invalidates stale Inngest reminders deterministically.
+  scheduleVersion   Int            @default(1)
+  postponeCount     Int            @default(0)
+
+  createdAt         DateTime       @default(now()) @db.Timestamptz(6)
+  updatedAt         DateTime       @updatedAt @db.Timestamptz(6)
+  startedAt         DateTime?      @db.Timestamptz(6)
+  completedAt       DateTime?      @db.Timestamptz(6)
+
+  scheduleHistory   TaskScheduleHistory[]
+  dependencies      TaskDependency[]      @relation("DependentTask")
+  dependedOnBy      TaskDependency[]      @relation("PrerequisiteTask")
+  activityRecords   ActivityRecord[]
+  backgroundJobs    BackgroundJob[]
+  notifications     Notification[]
+  extractedAction   ExtractedAction?
+
+  @@index([userId, status, commitmentType])
+  @@index([userId, scheduledStart, scheduledEnd])
+  @@index([userId, dueDate])
+  @@index([userId, lifeAreaId])
+  @@map("task")
+}
+
+enum ScheduleChangeReason {
+  INITIAL_SCHEDULE
+  USER_RESCHEDULED
+  MOVED_TO_FLEXIBLE
+  MOVED_TO_WAITING
+  DID_NOT_START
+  INTERRUPTED
+  AI_PROPOSED_USER_APPROVED
+}
+
+model TaskScheduleHistory {
+  id                   String               @id @default(cuid())
+  taskId               String
+  task                 Task                 @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  previousVersion      Int
+  newVersion           Int
+  previousCommitment   CommitmentType
+  newCommitment        CommitmentType
+  previousStart        DateTime?            @db.Timestamptz(6)
+  previousEnd          DateTime?            @db.Timestamptz(6)
+  newStart             DateTime?            @db.Timestamptz(6)
+  newEnd               DateTime?            @db.Timestamptz(6)
+  reason               ScheduleChangeReason
+  note                 String?
+
+  createdAt            DateTime             @default(now()) @db.Timestamptz(6)
+
+  @@index([taskId, createdAt])
+  @@map("task_schedule_history")
+}
+
+model TaskDependency {
+  id                 String   @id @default(cuid())
+  dependentTaskId    String
+  dependentTask      Task     @relation("DependentTask", fields: [dependentTaskId], references: [id], onDelete: Cascade)
+  prerequisiteTaskId String
+  prerequisiteTask   Task     @relation("PrerequisiteTask", fields: [prerequisiteTaskId], references: [id], onDelete: Cascade)
+
+  createdAt          DateTime @default(now()) @db.Timestamptz(6)
+
+  @@unique([dependentTaskId, prerequisiteTaskId])
+  @@map("task_dependency")
+}
+
+// ============================================================================
+// 4. ROUTINE INTELLIGENCE & PHYSICAL CONTEXT WINDOWS
+// ============================================================================
+
+enum RoutineKind {
+  LOCATION_WINDOW // Physical presence / office attendance (e.g., "Basilissa Office Mon-Tue")
+  WORK_BLOCK      // Dedicated focus block
+  HABIT           // Personal/learning habit (e.g., "Vocal warmups & DAW practice")
+  CLASS_SCHEDULE  // Recurring class/exam window
+}
+
+enum RoutineState {
+  DECLARED  // Explicitly configured by the user
+  OBSERVED  // Pattern detected from confirmed check-ins & activity history
+  SUGGESTED // Proposed by Orbit with reasoning; awaits user approval
+}
+
+model Routine {
+  id                  String       @id @default(cuid())
+  userId              String
+  user                User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  lifeAreaId          String?
+  lifeArea            LifeArea?    @relation(fields: [lifeAreaId], references: [id], onDelete: SetNull)
+
+  title               String
+  description         String?
+  kind                RoutineKind  @default(WORK_BLOCK)
+  state               RoutineState @default(DECLARED)
+
+  // Physical location is decoupled from project/task restrictions!
+  physicalLocation    String?      // e.g., "Basilissa Office", "Everlyx Office", "Home Studio"
+
+  // ISO Days of Week: 1 (Mon) .. 7 (Sun)
+  daysOfWeek          Int[]
+  // Wall-clock start and end times in user's IANA time zone ("09:00", "17:00")
+  startTimeLocal      String
+  endTimeLocal        String
+
+  // For OBSERVED / SUGGESTED routines
+  confidenceScore     Float?
+  suggestionReasoning String?
+  relatedDeclaredId   String?      // Links a SUGGESTED/OBSERVED routine to the DECLARED routine it refines
+  isActive            Boolean      @default(true)
+
+  createdAt           DateTime     @default(now()) @db.Timestamptz(6)
+  updatedAt           DateTime     @updatedAt @db.Timestamptz(6)
+
+  occurrences         RoutineOccurrence[]
+
+  @@index([userId, state, isActive])
+  @@map("routine")
+}
+
+enum RoutineAdherenceStatus {
+  MATCHED
+  SHIFTED
+  SKIPPED
+  UNCONFIRMED
+}
+
+model RoutineOccurrence {
+  id              String                 @id @default(cuid())
+  routineId       String
+  routine         Routine                @relation(fields: [routineId], references: [id], onDelete: Cascade)
+  occurrenceDate  String                 // YYYY-MM-DD in user's local timezone
+  expectedStart   DateTime               @db.Timestamptz(6)
+  expectedEnd     DateTime               @db.Timestamptz(6)
+  actualStart     DateTime?              @db.Timestamptz(6)
+  actualEnd       DateTime?              @db.Timestamptz(6)
+  status          RoutineAdherenceStatus @default(UNCONFIRMED)
+  note            String?
+
+  createdAt       DateTime               @default(now()) @db.Timestamptz(6)
+
+  @@unique([routineId, occurrenceDate])
+  @@map("routine_occurrence")
+}
+
+// ============================================================================
+// 5. ACTIVITY HISTORY LEDGER (CONFIRMED VS. INFERRED)
+// ============================================================================
+
+enum ActivitySource {
+  USER_CONFIRMED   // Explicitly logged by user
+  CHECKIN_RESPONSE // Reply to a proactive check-in ("Fixing the API integration for Basilissa")
+  TASK_COMPLETION  // Confirmed when finishing a task
+  IMPORTED         // Imported from external calendar/log
+  AI_INFERRED      // Inferred by AI; never presented as confirmed fact until user approves
+}
+
+model ActivityRecord {
+  id               String            @id @default(cuid())
+  userId           String
+  user             User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  lifeAreaId       String?
+  lifeArea         LifeArea?         @relation(fields: [lifeAreaId], references: [id], onDelete: SetNull)
+  projectId        String?
+  project          Project?          @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  milestoneId      String?
+  milestone        ProjectMilestone? @relation(fields: [milestoneId], references: [id], onDelete: SetNull)
+  taskId           String?
+  task             Task?             @relation(fields: [taskId], references: [id], onDelete: SetNull)
+
+  title            String
+  description      String?
+  physicalLocation String?
+  startedAt        DateTime          @db.Timestamptz(6)
+  endedAt          DateTime?         @db.Timestamptz(6)
+  durationMinutes  Int?
+
+  source           ActivitySource    @default(USER_CONFIRMED)
+  // Always false when source == AI_INFERRED until user explicitly confirms
+  isConfirmed      Boolean           @default(true)
+  confidenceScore  Float?
+
+  createdAt        DateTime          @default(now()) @db.Timestamptz(6)
+  updatedAt        DateTime          @updatedAt @db.Timestamptz(6)
+
+  @@index([userId, startedAt])
+  @@index([userId, lifeAreaId, isConfirmed])
+  @@map("activity_record")
+}
+
+// ============================================================================
+// 6. MEMORY INBOX & CANDIDATE ACTION EXTRACTION
+// ============================================================================
+
+enum CaptureKind {
+  TEXT_NOTE
+  VOICE_NOTE
+  MEETING_NOTES
+  PASTED_MESSAGE
+  QUICK_THOUGHT
+}
+
+enum InboxProcessingStatus {
+  RAW_UNPROCESSED
+  PROCESSING
+  EXTRACTED_PENDING_REVIEW
+  REVIEWED
+  FAILED_RETRYABLE
+}
+
+model MemoryInboxEntry {
+  id                  String                @id @default(cuid())
+  userId              String
+  user                User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  title               String?
+  rawContent          String                // Original user input is strictly preserved
+  captureKind         CaptureKind           @default(TEXT_NOTE)
+  processingStatus    InboxProcessingStatus @default(RAW_UNPROCESSED)
+
+  // Consent & voice metadata
+  voiceDurationSec    Int?
+  consentConfirmed    Boolean               @default(true)
+  speakerContext      String?               // e.g., "Conversation with Basilissa CEO"
+  aiSummary           String?
+  lastError           String?
+
+  createdAt           DateTime              @default(now()) @db.Timestamptz(6)
+  updatedAt           DateTime              @updatedAt @db.Timestamptz(6)
+  reviewedAt          DateTime?             @db.Timestamptz(6)
+
+  extractedActions    ExtractedAction[]
+
+  @@index([userId, processingStatus, createdAt])
+  @@map("memory_inbox_entry")
+}
+
+enum ExtractedIntentClassification {
+  AGREED_TO_DO      // User explicitly agreed to do this -> candidate commitment
+  ASSIGNED_TO_USER  // Assigned to the user -> candidate commitment
+  FOLLOW_UP         // Requires follow-up or waiting on someone -> candidate waiting task
+  DEADLINE_MENTION  // Important deadline context
+  IDEA_PROPOSED     // Proposed as an idea -> optional backlog/note, not auto-tasked
+  MENTIONED_ONLY    // Merely mentioned in conversation -> context only
+  ALREADY_COMPLETED // Already done -> candidate activity record
+}
+
+enum ExtractedReviewStatus {
+  PENDING_REVIEW
+  APPROVED
+  DISMISSED
+}
+
+model ExtractedAction {
+  id                   String                        @id @default(cuid())
+  inboxEntryId         String
+  inboxEntry           MemoryInboxEntry              @relation(fields: [inboxEntryId], references: [id], onDelete: Cascade)
+  lifeAreaId           String?
+  lifeArea             LifeArea?                     @relation(fields: [lifeAreaId], references: [id], onDelete: SetNull)
+  projectId            String?
+  project              Project?                      @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  materializedTaskId   String?                       @unique
+  materializedTask     Task?                         @relation(fields: [materializedTaskId], references: [id], onDelete: SetNull)
+
+  title                String
+  description          String?
+  sourceQuote          String?                       // Exact excerpt from rawContent
+  classification       ExtractedIntentClassification
+  suggestedCommitment  CommitmentType                @default(FLEXIBLE)
+  suggestedDueDate     DateTime?                     @db.Timestamptz(6)
+  suggestedScheduledAt DateTime?                     @db.Timestamptz(6)
+  waitingOnTarget      String?
+  confidenceScore      Float                         @default(0.8)
+
+  reviewStatus         ExtractedReviewStatus         @default(PENDING_REVIEW)
+  reviewedAt           DateTime?                     @db.Timestamptz(6)
+  createdAt            DateTime                      @default(now()) @db.Timestamptz(6)
+
+  @@index([inboxEntryId, reviewStatus])
+  @@map("extracted_action")
+}
+
+// ============================================================================
+// 7. PROACTIVE NOTIFICATIONS, TRANSACTIONAL OUTBOX & DURABLE BACKGROUND JOBS
+// ============================================================================
+
+enum BackgroundJobKind {
+  MORNING_BRIEFING
+  PRE_TASK_REMINDER
+  TASK_START_CONFIRMATION
+  TASK_END_CONFIRMATION
+  RANDOM_CHECKIN
+  MEMORY_INBOX_EXTRACTION
+  ROUTINE_EVALUATION
+}
+
+enum BackgroundJobStatus {
+  SCHEDULED
+  RUNNING
+  COMPLETED
+  FAILED
+  CANCELLED
+  SUPERSEDED // Invalidated because user rescheduled or completed the task early
+}
+
+model BackgroundJob {
+  id                  String              @id @default(cuid())
+  userId              String
+  user                User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  taskId              String?
+  task                Task?               @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  kind                BackgroundJobKind
+  status              BackgroundJobStatus @default(SCHEDULED)
+  scheduledFor        DateTime            @db.Timestamptz(6)
+  taskScheduleVersion Int?                // Must match Task.scheduleVersion at execution time
+  idempotencyKey      String              @unique
+  inngestEventId      String?
+  inngestRunId        String?
+
+  attempts            Int                 @default(0)
+  lastError           String?
+  supersededByJobId   String?
+  cancelReason        String?
+
+  createdAt           DateTime            @default(now()) @db.Timestamptz(6)
+  updatedAt           DateTime            @updatedAt @db.Timestamptz(6)
+  executedAt          DateTime?           @db.Timestamptz(6)
+  cancelledAt         DateTime?           @db.Timestamptz(6)
+
+  notifications       Notification[]
+
+  @@index([userId, status, scheduledFor])
+  @@index([taskId, status])
+  @@map("background_job")
+}
+
+enum OutboxStatus {
+  PENDING
+  PUBLISHED
+  FAILED
+  CANCELLED
+}
+
+model OutboxEvent {
+  id             String       @id @default(cuid())
+  userId         String
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  eventName      String       // e.g., "orbit/task.scheduled", "orbit/task.rescheduled", "orbit/inbox.captured"
+  payload        Json
+  idempotencyKey String       @unique
+  status         OutboxStatus @default(PENDING)
+  inngestEventId String?
+  attempts       Int          @default(0)
+  lastError      String?
+  nextAttemptAt  DateTime     @default(now()) @db.Timestamptz(6)
+
+  createdAt      DateTime     @default(now()) @db.Timestamptz(6)
+  publishedAt    DateTime?    @db.Timestamptz(6)
+
+  @@index([status, nextAttemptAt])
+  @@index([userId, createdAt])
+  @@map("outbox_event")
+}
+
+enum NotificationCategory {
+  MORNING_BRIEFING
+  PRE_COMMITMENT_CHECKIN
+  START_CONFIRMATION
+  END_CONFIRMATION
+  NEXT_COMMITMENT
+  RANDOM_CHECKIN
+  UNREVIEWED_MEMORY_NUDGE
+}
+
+enum NotificationDeliveryStatus {
+  PENDING
+  DELIVERED
+  READ
+  RESPONDED
+  SNOOZED
+  DISMISSED
+  SUPPRESSED_QUIET_HOURS
+  FAILED
+}
+
+model Notification {
+  id              String                     @id @default(cuid())
+  userId          String
+  user            User                       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  taskId          String?
+  task            Task?                      @relation(fields: [taskId], references: [id], onDelete: SetNull)
+  backgroundJobId String?
+  backgroundJob   BackgroundJob?             @relation(fields: [backgroundJobId], references: [id], onDelete: SetNull)
+
+  category        NotificationCategory
+  title           String
+  body            String
+  actionUrl       String                     // Reliable fallback: "/check-in/[id]"
+  metadata        Json?                      // Options shown on the Quick-Response screen
+  idempotencyKey  String                     @unique
+
+  status          NotificationDeliveryStatus @default(PENDING)
+  responseValue   String?                    // e.g., "YES", "STILL_WORKING", "INTERRUPTED", "DID_NOT_START"
+  responseNote    String?
+
+  scheduledFor    DateTime                   @db.Timestamptz(6)
+  deliveredAt     DateTime?                  @db.Timestamptz(6)
+  readAt          DateTime?                  @db.Timestamptz(6)
+  respondedAt     DateTime?                  @db.Timestamptz(6)
+  dismissedAt     DateTime?                  @db.Timestamptz(6)
+  snoozedUntil    DateTime?                  @db.Timestamptz(6)
+  retryCount      Int                        @default(0)
+  lastError       String?
+
+  createdAt       DateTime                   @default(now()) @db.Timestamptz(6)
+  updatedAt       DateTime                   @updatedAt @db.Timestamptz(6)
+
+  @@index([userId, status, scheduledFor])
+  @@map("notification")
+}
+
+model PushSubscription {
+  id         String    @id @default(cuid())
+  userId     String
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  endpoint   String    @unique
+  p256dhKey  String
+  authKey    String
+  userAgent  String?
+  deviceName String?
+  isActive   Boolean   @default(true)
+
+  createdAt  DateTime  @default(now()) @db.Timestamptz(6)
+  updatedAt  DateTime  @updatedAt @db.Timestamptz(6)
+  lastUsedAt DateTime? @db.Timestamptz(6)
+
+  @@index([userId, isActive])
+  @@map("push_subscription")
+}
