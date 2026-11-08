@@ -12,7 +12,6 @@ import React, {
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
-  Bell,
   CalendarCheck,
   CalendarRange,
   FileText,
@@ -33,6 +32,8 @@ import {
 import { MemoryCaptureForm } from "@/components/inbox/memory-capture-studio";
 import { OrbitModal, SubmitButton } from "@/components/ui/orbit-modal";
 import { useOrbitToast } from "@/components/ui/orbit-toast";
+import { ExpandableFab } from "./expandable-fab";
+import { QuickVoiceDialog } from "./quick-voice-dialog";
 import { PwaInstallBanner } from "./pwa-install-banner";
 
 export interface ShellLifeArea {
@@ -146,6 +147,7 @@ export function OrbitShell({
   const [showMoreTaskOptions, setShowMoreTaskOptions] = useState(false);
   const [commitment, setCommitment] = useState<CommitmentChoice>("FLEXIBLE");
   const [areaId, setAreaId] = useState<string>("");
+  const [isVoiceOpen, setIsVoiceOpen] = useState(false);
 
   const openCapture = useCallback(
     (options?: OpenCaptureOptions) => {
@@ -222,16 +224,7 @@ export function OrbitShell({
             Orbit
           </Link>
 
-          <button
-            type="button"
-            onClick={() => openCapture()}
-            className="btn btn-primary btn-block mt-6"
-          >
-            <Plus className="h-4 w-4" aria-hidden="true" />
-            <span>Capture</span>
-          </button>
-
-          <nav aria-label="Primary" className="mt-6">
+          <nav aria-label="Primary" className="mt-8">
             <ul className="menu flex-nowrap w-full gap-1 p-0 text-[0.9375rem]">
               {NAV_ITEMS.map((item) => {
                 const Icon = item.icon;
@@ -262,41 +255,7 @@ export function OrbitShell({
             </ul>
           </nav>
 
-          <div className="mt-auto border-t border-base-300/70 pt-3 flex flex-col gap-1">
-            <ul className="menu flex-nowrap w-full p-0 text-[0.9375rem]">
-              <li>
-                <Link
-                  href="/settings"
-                  aria-current={isActive("/settings") ? "page" : undefined}
-                  className={`py-2.5 font-medium ${
-                    isActive("/settings") ? "menu-active" : ""
-                  }`}
-                >
-                  {unreadCheckInCount > 0 ? (
-                    <Bell className="h-5 w-5 shrink-0" aria-hidden="true" />
-                  ) : (
-                    <SlidersHorizontal
-                      className="h-5 w-5 shrink-0"
-                      aria-hidden="true"
-                    />
-                  )}
-                  <span>Settings</span>
-                  {unreadCheckInCount > 0 && (
-                    <span
-                      className={`badge badge-sm tabular ${
-                        isActive("/settings")
-                          ? "badge-secondary"
-                          : "badge-neutral"
-                      }`}
-                      aria-label={`${unreadCheckInCount} active check-ins`}
-                    >
-                      {unreadCheckInCount}
-                    </span>
-                  )}
-                </Link>
-              </li>
-            </ul>
-
+          <div className="mt-auto border-t border-base-300/70 pt-3">
             {user && (
               <div className="dropdown dropdown-top w-full">
                 <div
@@ -319,8 +278,24 @@ export function OrbitShell({
                 </div>
                 <ul
                   tabIndex={0}
-                  className="dropdown-content menu z-30 mb-2 w-52 rounded-box bg-base-100 p-1.5 shadow-md border border-base-300/70 text-sm"
+                  className="dropdown-content menu z-30 mb-2 w-56 rounded-box bg-base-100 p-1.5 shadow-md border border-base-300/70 text-sm"
                 >
+                  <li>
+                    <Link
+                      href="/settings"
+                      className="flex items-center justify-between"
+                    >
+                      <div className="flex items-center gap-2">
+                        <SlidersHorizontal className="h-4 w-4" />
+                        <span>Settings</span>
+                      </div>
+                      {unreadCheckInCount > 0 && (
+                        <span className="badge badge-sm badge-secondary tabular">
+                          {unreadCheckInCount}
+                        </span>
+                      )}
+                    </Link>
+                  </li>
                   <li>
                     <Link href="/settings?tab=account">
                       <User className="h-4 w-4" />
@@ -351,46 +326,19 @@ export function OrbitShell({
                 Orbit
               </Link>
             </div>
-            <div className="navbar-end gap-1.5">
-              <Link
-                href={
-                  unreadCheckInCount > 0 ? "/settings?tab=checkins" : "/settings"
-                }
-                aria-label={
-                  unreadCheckInCount > 0
-                    ? `Settings and check-ins (${unreadCheckInCount} waiting)`
-                    : "Settings"
-                }
-                className="btn btn-ghost btn-sm btn-square"
-              >
-                {unreadCheckInCount > 0 ? (
-                  <span className="indicator">
-                    <span className="indicator-item badge badge-neutral badge-xs tabular">
-                      {unreadCheckInCount}
-                    </span>
-                    <Bell className="h-4 w-4" aria-hidden="true" />
-                  </span>
-                ) : (
-                  <SlidersHorizontal className="h-4 w-4" aria-hidden="true" />
-                )}
-              </Link>
+            <div className="navbar-end">
               {user && (
                 <Link
                   href="/settings?tab=account"
                   aria-label="Account details"
-                  className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10 text-primary text-xs font-semibold"
+                  className="relative flex h-8 w-8 items-center justify-center rounded-full bg-primary/10 text-primary text-xs font-semibold hover:bg-primary/20 transition-colors"
                 >
                   {user.name ? user.name.slice(0, 2).toUpperCase() : "U"}
+                  {unreadCheckInCount > 0 && (
+                    <span className="absolute -top-0.5 -right-0.5 h-2.5 w-2.5 rounded-full bg-secondary ring-2 ring-base-100" />
+                  )}
                 </Link>
               )}
-              <button
-                type="button"
-                onClick={() => openCapture()}
-                className="btn btn-primary btn-sm"
-              >
-                <Plus className="h-4 w-4" aria-hidden="true" />
-                <span>Capture</span>
-              </button>
             </div>
           </header>
 
@@ -877,6 +825,18 @@ export function OrbitShell({
             </form>
           )}
         </OrbitModal>
+
+        {/* Expandable Speed-Dial FAB for Quick Actions (Voice, Task, Note, Work Log) */}
+        <ExpandableFab
+          onOpenCapture={(m) => openCapture({ mode: m })}
+          onOpenVoice={() => setIsVoiceOpen(true)}
+        />
+
+        {/* Floating Quick Voice AI Dialog */}
+        <QuickVoiceDialog
+          isOpen={isVoiceOpen}
+          onClose={() => setIsVoiceOpen(false)}
+        />
       </div>
     </OrbitCaptureContext.Provider>
   );

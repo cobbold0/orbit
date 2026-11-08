@@ -940,4 +940,127 @@ export async function initializeNewUserWorkspaceAction(input?: {
   revalidateAllOrbitViews();
 }
 
+export interface QuickVoiceCommandResult {
+  ok: boolean;
+  intent: "TASK" | "ACTIVITY" | "NOTE";
+  title: string;
+  summary: string;
+  lifeAreaName?: string;
+}
+
+export async function processQuickVoiceCommandAction(
+  spokenText: string
+): Promise<QuickVoiceCommandResult> {
+  const userId = await requireUserId();
+  const trimmed = spokenText.trim();
+  if (!trimmed) {
+    throw new Error("No speech or command text provided.");
+  }
+
+  const rateCheck = checkRateLimit(`${userId}:voice_cmd`, 30, 60_000);
+  if (!rateCheck.success) {
+    throw new Error("Voice command rate limit exceeded. Please wait a moment.");
+  }
+
+  // Pattern A: Activity / Log work
+  // e.g. "Log 45 minutes on backend API", "Log work: meeting with design team", "I worked on Orbit for 2 hours"
+  const isExplicitActivity =
+    /^(?:log(?:ged)?|record)\s+(?:work|activity|hours?|mins?|minutes?)\b/i.test(trimmed) ||
+    /^(?:i\s+)?(?:worked\s+on|spent|finished\s+work\s+on)\b/i.test(trimmed);
+
+  if (isExplicitActivity) {
+    let durationMinutes = 45;
+    const hourMatch = trimmed.match(/(\d+(?:\.\d+)?)\s*(?:hours?|hrs?|h)\b/i);
+    const minMatch = trimmed.match(/(\d+)\s*(?:minutes?|mins?|m)\b/i);
+    if (hourMatch && hourMatch[1]) {
+      durationMinutes = Math.round(parseFloat(hourMatch[1]) * 60);
+    } else if (minMatch && minMatch[1]) {
+      durationMinutes = parseInt(minMatch[1], 10);
+    }
+
+    const cleaned = trimmed
+      .replace(/^(?:log(?:ged)?|record)?\s*(?:work|activity)?\s*(?:on|for|:)?\s*/i, "")
+      .replace(/^(?:i\s+)?(?:worked\s+on|spent|finished\s+work\s+on)\s*/i, "")
+      .replace(/(?:for\s+)?\d+(?:\.\d+)?\s*(?:hours?|hrs?|minutes?|mins?)\s*(?:on\s+)?/i, "")
+      .trim();
+
+    const title = cleaned
+      ? cleaned.charAt(0).toUpperCase() + cleaned.slice(1)
+      : "Work session";
+
+    await logExplicitActivityCheckIn(userId, {
+      title,
+      durationMinutes,
+    });
+
+    revalidateAllOrbitViews();
+    return {
+      ok: true,
+      intent: "ACTIVITY",
+      title,
+      summary: `Logged ${durationMinutes}m of work`,
+    };
+  }
+
+  // Pattern B: Note / Memory Capture
+  // e.g. "Take a note that Sarah agreed to send designs", "Note: client wants weekly check-ins", "Remember that..."
+  const isExplicitNote =
+    /^(?:take|save|write|capture)?\s*(?:a\s+)?(?:note|memo|thought|idea)\b/i.test(trimmed) ||
+    /^(?:note\s+that|remember\s+that|keep\s+in\s+mind\s+that)\b/i.test(trimmed);
+
+  if (isExplicitNote) {
+    const cleaned = trimmed
+      .replace(
+        /^(?:take|save|write|capture)?\s*(?:a\s+)?(?:note|memo|thought|idea)?\s*(?:that|:|about)?\s*/i,
+        ""
+      )
+      .trim();
+
+    const noteContent = cleaned || trimmed;
+    const firstLine = noteContent.split("\n")[0] ?? "Voice Note";
+    const title = firstLine.slice(0, 60);
+
+    await captureAndProcessMemoryEntry(userId, {
+      title,
+      rawContent: noteContent,
+      captureKind: CaptureKind.VOICE_NOTE,
+      consentConfirmed: true,
+    });
+
+    revalidateAllOrbitViews();
+    return {
+      ok: true,
+      intent: "NOTE",
+      title,
+      summary: "Saved to Memory Inbox with action extraction",
+    };
+  }
+
+  // Pattern C: Task (default or explicit)
+  // e.g. "Create a task to review contracts tomorrow", "Remind me to call John at 5pm", "Buy groceries"
+  const cleanedTask = trimmed
+    .replace(
+      /^(?:create|add|new|make)?\s*(?:a\s+)?(?:task|todo)?\s*(?:to|:|for)?\s*/i,
+      ""
+    )
+    .replace(/^(?:remind\s+me\s+to|need\s+to|i\s+need\s+to|have\s+to)\s*/i, "")
+    .trim();
+
+  const taskInput = cleanedTask || trimmed;
+  const created = await createTaskWithQuickCapture(userId, taskInput);
+  const area = await prisma.lifeArea.findUnique({
+    where: { id: created.lifeAreaId },
+    select: { name: true },
+  });
+
+  revalidateAllOrbitViews();
+  return {
+    ok: true,
+    intent: "TASK",
+    title: created.title,
+    summary: `Task created (${created.commitmentType.toLowerCase()})`,
+    lifeAreaName: area?.name,
+  };
+}
+
 
