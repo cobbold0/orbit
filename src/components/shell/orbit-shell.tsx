@@ -12,12 +12,14 @@ import React, {
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
+  Bell,
   CalendarCheck,
   CalendarRange,
   FileText,
   History,
   Layers,
   Plus,
+  SlidersHorizontal,
 } from "lucide-react";
 import {
   createStructuredTaskAction,
@@ -27,6 +29,7 @@ import {
 import { MemoryCaptureForm } from "@/components/inbox/memory-capture-studio";
 import { OrbitModal, SubmitButton } from "@/components/ui/orbit-modal";
 import { useOrbitToast } from "@/components/ui/orbit-toast";
+import { PwaInstallBanner } from "./pwa-install-banner";
 
 export interface ShellLifeArea {
   id: string;
@@ -89,6 +92,7 @@ interface OrbitShellProps {
   lifeAreas: ShellLifeArea[];
   projects: ShellProject[];
   unreviewedInboxCount?: number;
+  unreadCheckInCount?: number;
 }
 
 const NAV_ITEMS = [
@@ -106,6 +110,7 @@ export function OrbitShell({
   lifeAreas,
   projects,
   unreviewedInboxCount = 0,
+  unreadCheckInCount = 0,
 }: OrbitShellProps) {
   const pathname = usePathname();
   const idBase = useId();
@@ -236,6 +241,42 @@ export function OrbitShell({
               })}
             </ul>
           </nav>
+
+          <div className="mt-auto border-t border-base-300/70 pt-4">
+            <ul className="menu flex-nowrap w-full p-0 text-[0.9375rem]">
+              <li>
+                <Link
+                  href="/settings"
+                  aria-current={isActive("/settings") ? "page" : undefined}
+                  className={`py-2.5 font-medium ${
+                    isActive("/settings") ? "menu-active" : ""
+                  }`}
+                >
+                  {unreadCheckInCount > 0 ? (
+                    <Bell className="h-5 w-5 shrink-0" aria-hidden="true" />
+                  ) : (
+                    <SlidersHorizontal
+                      className="h-5 w-5 shrink-0"
+                      aria-hidden="true"
+                    />
+                  )}
+                  <span>Settings</span>
+                  {unreadCheckInCount > 0 && (
+                    <span
+                      className={`badge badge-sm tabular ${
+                        isActive("/settings")
+                          ? "badge-secondary"
+                          : "badge-neutral"
+                      }`}
+                      aria-label={`${unreadCheckInCount} active check-ins`}
+                    >
+                      {unreadCheckInCount}
+                    </span>
+                  )}
+                </Link>
+              </li>
+            </ul>
+          </div>
         </aside>
 
         <div className="flex min-w-0 flex-1 flex-col">
@@ -246,7 +287,29 @@ export function OrbitShell({
                 Orbit
               </Link>
             </div>
-            <div className="navbar-end">
+            <div className="navbar-end gap-1.5">
+              <Link
+                href={
+                  unreadCheckInCount > 0 ? "/settings?tab=checkins" : "/settings"
+                }
+                aria-label={
+                  unreadCheckInCount > 0
+                    ? `Settings and check-ins (${unreadCheckInCount} waiting)`
+                    : "Settings"
+                }
+                className="btn btn-ghost btn-sm btn-square"
+              >
+                {unreadCheckInCount > 0 ? (
+                  <span className="indicator">
+                    <span className="indicator-item badge badge-neutral badge-xs tabular">
+                      {unreadCheckInCount}
+                    </span>
+                    <Bell className="h-4 w-4" aria-hidden="true" />
+                  </span>
+                ) : (
+                  <SlidersHorizontal className="h-4 w-4" aria-hidden="true" />
+                )}
+              </Link>
               <button
                 type="button"
                 onClick={() => openCapture()}
@@ -263,6 +326,7 @@ export function OrbitShell({
             tabIndex={-1}
             className="mx-auto w-full max-w-5xl min-w-0 flex-1 px-4 pb-24 pt-5 outline-none sm:px-8 md:pb-16 md:pt-10"
           >
+            <PwaInstallBanner />
             {children}
           </main>
         </div>

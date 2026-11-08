@@ -1,6 +1,6 @@
 import { getCurrentUser } from "@/lib/auth/session";
 import { getLifeAreasAndProjectsData } from "@/modules/life-areas/life-area-service";
-import { getUnreviewedInboxActionCount } from "@/lib/shell-data";
+import { getShellBadgeCounts } from "@/lib/shell-data";
 import { OpenCaptureButton, OrbitShell } from "@/components/shell/orbit-shell";
 import { PageHeader } from "@/components/ui/page";
 import { AllTasksClient } from "@/components/areas/all-tasks-client";
@@ -22,10 +22,10 @@ export default async function AllTasksPage({
   if (!user) return null;
 
   const params = await searchParams;
-  const [pref, data, unreviewedInboxCount] = await Promise.all([
+  const [pref, data, badges] = await Promise.all([
     prisma.userPreference.findUnique({ where: { userId: user.id } }),
     getLifeAreasAndProjectsData(user.id),
-    getUnreviewedInboxActionCount(user.id),
+    getShellBadgeCounts(user.id),
   ]);
 
   const tz = pref?.ianaTimeZone ?? "Africa/Lagos";
@@ -74,7 +74,8 @@ export default async function AllTasksPage({
     <OrbitShell
       lifeAreas={data.lifeAreas}
       projects={shellProjects}
-      unreviewedInboxCount={unreviewedInboxCount}
+      unreviewedInboxCount={badges.unreviewedInboxCount}
+      unreadCheckInCount={badges.unreadCheckInCount}
     >
       <div className="page">
         <PageHeader

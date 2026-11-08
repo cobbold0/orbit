@@ -14,7 +14,7 @@ import {
   formatShortDate,
 } from "@/lib/time/format";
 import { prisma } from "@/lib/db/prisma";
-import { getUnreviewedInboxActionCount } from "@/lib/shell-data";
+import { getShellBadgeCounts } from "@/lib/shell-data";
 
 export const dynamic = "force-dynamic";
 
@@ -22,13 +22,13 @@ export default async function ActivityPage() {
   const user = await getCurrentUser();
   if (!user) return null;
 
-  const [data, projects, unreviewedInboxCount] = await Promise.all([
+  const [data, projects, badges] = await Promise.all([
     getActivityAndRoutinesData(user.id),
     prisma.project.findMany({
       where: { userId: user.id, status: "ACTIVE" },
       select: { id: true, title: true, lifeAreaId: true },
     }),
-    getUnreviewedInboxActionCount(user.id),
+    getShellBadgeCounts(user.id),
   ]);
 
   const tz = data.ianaTimeZone;
@@ -95,7 +95,8 @@ export default async function ActivityPage() {
     <OrbitShell
       lifeAreas={data.lifeAreas}
       projects={projects}
-      unreviewedInboxCount={unreviewedInboxCount}
+      unreviewedInboxCount={badges.unreviewedInboxCount}
+      unreadCheckInCount={badges.unreadCheckInCount}
     >
       <ActivityClient
         areaOptions={areaOptions}

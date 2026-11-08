@@ -18,8 +18,10 @@ import {
   completeTaskAction,
   recoverOrRescheduleTaskAction,
   resolveInferredActivityAction,
+  respondToNotificationAction,
   startTaskAction,
 } from "@/app/actions/orbit-actions";
+import { evaluateDueBackgroundJobs } from "@/modules/notifications/notification-service";
 
 export const dynamic = "force-dynamic";
 
@@ -36,6 +38,7 @@ export default async function TodayPage() {
     );
   }
 
+  await evaluateDueBackgroundJobs({ userId: user.id, limit: 10 });
   const data = await getNowOverviewData(user.id);
   const tz = data.ianaTimeZone;
   const loc = data.activeLocationRoutine;
@@ -59,6 +62,7 @@ export default async function TodayPage() {
       lifeAreas={data.lifeAreas}
       projects={data.projects}
       unreviewedInboxCount={pendingActions}
+      unreadCheckInCount={data.activeCheckIns.length}
     >
       <div className="page">
         <PageHeader
@@ -76,6 +80,38 @@ export default async function TodayPage() {
         />
 
         <ConversationalPlanner />
+
+        {data.activeCheckIns.length > 0 && (
+          <Card title="Check-ins">
+            {data.activeCheckIns.map((chk) => (
+              <div key={chk.id} className="orbit-row">
+                <div className="orbit-row-main">
+                  <p className="title">{chk.title}</p>
+                  <p className="meta">{chk.body}</p>
+                </div>
+                <div className="orbit-row-actions">
+                  <Link
+                    href={chk.actionUrl}
+                    className="btn btn-primary btn-sm"
+                  >
+                    Respond
+                  </Link>
+                  <form action={respondToNotificationAction}>
+                    <input type="hidden" name="notificationId" value={chk.id} />
+                    <input type="hidden" name="responseValue" value="DISMISS" />
+                    <button
+                      type="submit"
+                      aria-label={`Dismiss ${chk.title}`}
+                      className="btn btn-ghost btn-sm"
+                    >
+                      Dismiss
+                    </button>
+                  </form>
+                </div>
+              </div>
+            ))}
+          </Card>
+        )}
 
         {data.needsCheckInTasks.length > 0 && (
           <Card title="Needs a check-in">

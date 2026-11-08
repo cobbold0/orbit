@@ -2,7 +2,8 @@
 
 import React, { useState } from "react";
 import Link from "next/link";
-import { Check } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { Check, RefreshCw } from "lucide-react";
 import { AreaLabel, Card, PageHeader } from "@/components/ui/page";
 import {
   CreateRoutineModal,
@@ -10,6 +11,7 @@ import {
   type ActivityAreaOption,
 } from "@/components/modals/activity-modals";
 import {
+  evaluateRoutinesNowAction,
   resolveInferredActivityAction,
   resolveSuggestedRoutineAction,
 } from "@/app/actions/orbit-actions";
@@ -64,8 +66,29 @@ export function ActivityClient({
   declaredRoutines: RoutineItem[];
   suggestedRoutines: RoutineItem[];
 }) {
+  const router = useRouter();
   const [tab, setTab] = useState<"log" | "routines">("log");
+  const [isCheckingPatterns, setIsCheckingPatterns] = useState(false);
   const { notify } = useOrbitToast();
+
+  async function handleCheckPatterns() {
+    setIsCheckingPatterns(true);
+    try {
+      const res = await evaluateRoutinesNowAction();
+      if (res.createdCount > 0) {
+        notify(
+          `${res.createdCount} routine ${
+            res.createdCount === 1 ? "update" : "updates"
+          } suggested`
+        );
+      } else {
+        notify("Routines match your confirmed work log");
+      }
+      router.refresh();
+    } finally {
+      setIsCheckingPatterns(false);
+    }
+  }
 
   const maxMinutes = Math.max(
     1,
@@ -275,7 +298,27 @@ export function ActivityClient({
             </Card>
           )}
 
-          <Card title="Weekly routines">
+          <Card
+            title="Weekly routines"
+            action={
+              <button
+                type="button"
+                disabled={isCheckingPatterns}
+                onClick={() => void handleCheckPatterns()}
+                className="btn btn-ghost btn-sm"
+              >
+                <RefreshCw
+                  className={`h-3.5 w-3.5 ${
+                    isCheckingPatterns ? "animate-spin" : ""
+                  }`}
+                  aria-hidden="true"
+                />
+                <span>
+                  {isCheckingPatterns ? "Checking" : "Check patterns"}
+                </span>
+              </button>
+            }
+          >
             {declaredRoutines.length === 0 ? (
               <div className="orbit-row">
                 <p className="meta orbit-row-main">

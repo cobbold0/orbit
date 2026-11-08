@@ -1,6 +1,6 @@
 import { getCurrentUser } from "@/lib/auth/session";
 import { getLifeAreasAndProjectsData } from "@/modules/life-areas/life-area-service";
-import { getUnreviewedInboxActionCount } from "@/lib/shell-data";
+import { getShellBadgeCounts } from "@/lib/shell-data";
 import { OrbitShell } from "@/components/shell/orbit-shell";
 import { PageHeader } from "@/components/ui/page";
 import { ProjectModal } from "@/components/modals/project-modal";
@@ -21,9 +21,9 @@ export default async function AllProjectsPage({
   if (!user) return null;
 
   const params = await searchParams;
-  const [data, unreviewedInboxCount] = await Promise.all([
+  const [data, badges] = await Promise.all([
     getLifeAreasAndProjectsData(user.id),
-    getUnreviewedInboxActionCount(user.id),
+    getShellBadgeCounts(user.id),
   ]);
 
   const selected = data.lifeAreas.find((a) => a.slug === params.area);
@@ -70,7 +70,8 @@ export default async function AllProjectsPage({
     <OrbitShell
       lifeAreas={data.lifeAreas}
       projects={shellProjects}
-      unreviewedInboxCount={unreviewedInboxCount}
+      unreviewedInboxCount={badges.unreviewedInboxCount}
+      unreadCheckInCount={badges.unreadCheckInCount}
     >
       <div className="page">
         <PageHeader

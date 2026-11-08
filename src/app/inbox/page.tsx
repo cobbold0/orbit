@@ -1,5 +1,6 @@
 import { getCurrentUser } from "@/lib/auth/session";
 import { prisma } from "@/lib/db/prisma";
+import { getUnreadCheckInCount } from "@/lib/shell-data";
 import { OrbitShell } from "@/components/shell/orbit-shell";
 import {
   NotesClient,
@@ -25,27 +26,29 @@ export default async function NotesPage() {
   const user = await getCurrentUser();
   if (!user) return null;
 
-  const [pref, lifeAreas, projects, entries] = await Promise.all([
-    prisma.userPreference.findUnique({ where: { userId: user.id } }),
-    prisma.lifeArea.findMany({
-      where: { userId: user.id, isArchived: false },
-      orderBy: { sortOrder: "asc" },
-    }),
-    prisma.project.findMany({
-      where: { userId: user.id, status: "ACTIVE" },
-      select: { id: true, title: true, lifeAreaId: true },
-    }),
-    prisma.memoryInboxEntry.findMany({
-      where: { userId: user.id },
-      include: {
-        extractedActions: {
-          include: { lifeArea: true, materializedTask: true },
-          orderBy: { createdAt: "asc" },
+  const [pref, lifeAreas, projects, entries, unreadCheckInCount] =
+    await Promise.all([
+      prisma.userPreference.findUnique({ where: { userId: user.id } }),
+      prisma.lifeArea.findMany({
+        where: { userId: user.id, isArchived: false },
+        orderBy: { sortOrder: "asc" },
+      }),
+      prisma.project.findMany({
+        where: { userId: user.id, status: "ACTIVE" },
+        select: { id: true, title: true, lifeAreaId: true },
+      }),
+      prisma.memoryInboxEntry.findMany({
+        where: { userId: user.id },
+        include: {
+          extractedActions: {
+            include: { lifeArea: true, materializedTask: true },
+            orderBy: { createdAt: "asc" },
+          },
         },
-      },
-      orderBy: { createdAt: "desc" },
-    }),
-  ]);
+        orderBy: { createdAt: "desc" },
+      }),
+      getUnreadCheckInCount(user.id),
+    ]);
 
   const tz = pref?.ianaTimeZone ?? "Africa/Lagos";
   const areaOptions = lifeAreas.map((a) => ({ id: a.id, name: a.name }));
@@ -94,6 +97,7 @@ export default async function NotesPage() {
       lifeAreas={lifeAreas}
       projects={projects}
       unreviewedInboxCount={pendingTotal}
+      unreadCheckInCount={unreadCheckInCount}
     >
       <NotesClient
         entries={noteItems}

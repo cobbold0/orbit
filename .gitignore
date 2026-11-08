@@ -12,6 +12,7 @@ build/
 .env
 .env*.local
 !.env.example
+.orbit-vapid.json
 
 # Misc
 .DS_Store

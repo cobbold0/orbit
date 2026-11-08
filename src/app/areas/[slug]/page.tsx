@@ -2,7 +2,7 @@ import { notFound } from "next/navigation";
 import { Undo2 } from "lucide-react";
 import { getCurrentUser } from "@/lib/auth/session";
 import { getSingleLifeAreaBySlug } from "@/modules/life-areas/life-area-service";
-import { getUnreviewedInboxActionCount } from "@/lib/shell-data";
+import { getShellBadgeCounts } from "@/lib/shell-data";
 import { OrbitShell } from "@/components/shell/orbit-shell";
 import { AreaIconBadge, Card, PageHeader } from "@/components/ui/page";
 import { AreaActionsMenu, EditAreaModal } from "@/components/modals/area-modal";
@@ -32,9 +32,9 @@ export default async function SingleAreaPage({ params }: SingleAreaPageProps) {
   if (!user) return null;
 
   const { slug } = await params;
-  const [data, unreviewedInboxCount] = await Promise.all([
+  const [data, badges] = await Promise.all([
     getSingleLifeAreaBySlug(user.id, slug),
-    getUnreviewedInboxActionCount(user.id),
+    getShellBadgeCounts(user.id),
   ]);
 
   if (!data.area) {
@@ -113,7 +113,8 @@ export default async function SingleAreaPage({ params }: SingleAreaPageProps) {
     <OrbitShell
       lifeAreas={lifeAreas}
       projects={allProjects}
-      unreviewedInboxCount={unreviewedInboxCount}
+      unreviewedInboxCount={badges.unreviewedInboxCount}
+      unreadCheckInCount={badges.unreadCheckInCount}
     >
       <div className="page">
         <PageHeader

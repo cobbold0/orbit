@@ -177,10 +177,40 @@ export async function resolveSuggestedRoutine(
     });
   }
 
+  if (routine.relatedDeclaredId) {
+    const parentDeclared = await prisma.routine.findFirst({
+      where: { id: routine.relatedDeclaredId, userId },
+    });
+
+    if (parentDeclared) {
+      return prisma.$transaction(async (tx) => {
+        const updatedParent = await tx.routine.update({
+          where: { id: parentDeclared.id },
+          data: {
+            daysOfWeek: routine.daysOfWeek,
+            startTimeLocal: routine.startTimeLocal,
+            endTimeLocal: routine.endTimeLocal,
+            ...(routine.physicalLocation
+              ? { physicalLocation: routine.physicalLocation }
+              : {}),
+          },
+        });
+
+        await tx.routine.update({
+          where: { id: routine.id },
+          data: { isActive: false },
+        });
+
+        return updatedParent;
+      });
+    }
+  }
+
   return prisma.routine.update({
     where: { id: routine.id },
     data: {
       state: RoutineState.DECLARED,
+      suggestionReasoning: null,
     },
   });
 }

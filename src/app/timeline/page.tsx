@@ -12,7 +12,7 @@ import { ScheduleWindowModal } from "@/components/modals/schedule-window-modal";
 import { formatDuration, formatLongDate } from "@/lib/time/format";
 import { completeTaskAction } from "@/app/actions/orbit-actions";
 import { prisma } from "@/lib/db/prisma";
-import { getUnreviewedInboxActionCount } from "@/lib/shell-data";
+import { getShellBadgeCounts } from "@/lib/shell-data";
 
 export const dynamic = "force-dynamic";
 
@@ -50,13 +50,13 @@ export default async function TimelinePage({ searchParams }: TimelinePageProps) 
 
   const params = await searchParams;
   const view = params.view === "week" ? "week" : "day";
-  const [timeline, projects, unreviewedInboxCount] = await Promise.all([
+  const [timeline, projects, badges] = await Promise.all([
     getUnifiedTimelineData(user.id, params.date),
     prisma.project.findMany({
       where: { userId: user.id, status: "ACTIVE" },
       select: { id: true, title: true, lifeAreaId: true },
     }),
-    getUnreviewedInboxActionCount(user.id),
+    getShellBadgeCounts(user.id),
   ]);
 
   const focal = timeline.focalDay;
@@ -69,7 +69,8 @@ export default async function TimelinePage({ searchParams }: TimelinePageProps) 
     <OrbitShell
       lifeAreas={timeline.lifeAreas}
       projects={projects}
-      unreviewedInboxCount={unreviewedInboxCount}
+      unreviewedInboxCount={badges.unreviewedInboxCount}
+      unreadCheckInCount={badges.unreadCheckInCount}
     >
       <div className="page">
         <PageHeader

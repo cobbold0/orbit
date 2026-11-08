@@ -1,6 +1,8 @@
 import {
+  BackgroundJobStatus,
   CommitmentType,
   InboxProcessingStatus,
+  NotificationDeliveryStatus,
   RoutineState,
   TaskStatus,
 } from "@prisma/client";
@@ -45,6 +47,8 @@ export async function getNowOverviewData(userId: string, nowUtc = new Date()) {
     upcomingDeadlines,
     todayActivities,
     unreviewedInbox,
+    activeCheckIns,
+    pendingJobsCount,
   ] = await Promise.all([
     prisma.lifeArea.findMany({
       where: { userId, isArchived: false },
@@ -150,6 +154,20 @@ export async function getNowOverviewData(userId: string, nowUtc = new Date()) {
       orderBy: { createdAt: "desc" },
       take: 3,
     }),
+    prisma.notification.findMany({
+      where: {
+        userId,
+        status: NotificationDeliveryStatus.DELIVERED,
+      },
+      orderBy: { createdAt: "desc" },
+      take: 3,
+    }),
+    prisma.backgroundJob.count({
+      where: {
+        userId,
+        status: BackgroundJobStatus.SCHEDULED,
+      },
+    }),
   ]);
 
   // Filter routines that apply to today's ISO day of week
@@ -202,5 +220,7 @@ export async function getNowOverviewData(userId: string, nowUtc = new Date()) {
     upcomingDeadlines,
     todayActivities,
     unreviewedInbox,
+    activeCheckIns,
+    pendingJobsCount,
   };
 }

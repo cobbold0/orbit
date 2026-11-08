@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import {
   CaptureKind,
+  CheckInFrequency,
   CommitmentType,
   ProjectKind,
   ProjectStatus,
@@ -48,6 +49,16 @@ import type {
 } from "@/lib/ai/schemas";
 import { resolveLocalDateTimeToUtc } from "@/lib/time/timezone";
 import { prisma } from "@/lib/db/prisma";
+import {
+  generateMorningBriefingForUser,
+  generateRandomActivityCheckIn,
+  generateTaskCheckInSample,
+  removeUserPushSubscription,
+  respondToNotification,
+  updateUserPreferences,
+} from "@/modules/notifications/notification-service";
+import { sendPushToUserDevices } from "@/lib/push/web-push";
+import { evaluateUserRoutineIntelligence } from "@/modules/routines/routine-intelligence";
 
 function revalidateAllOrbitViews() {
   revalidatePath("/");
@@ -55,6 +66,8 @@ function revalidateAllOrbitViews() {
   revalidatePath("/areas", "layout");
   revalidatePath("/routines");
   revalidatePath("/inbox");
+  revalidatePath("/settings");
+  revalidatePath("/check-in", "layout");
 }
 
 async function requireUserId(): Promise<string> {
@@ -659,4 +672,169 @@ export async function transcribeAudioBase64Action(
   await requireUserId();
   return aiGateway.transcribeAudioNote(audioBase64, mimeType);
 }
+
+// ============================================================================
+// PHASE 4: PROACTIVE CHECK-INS, PREFERENCES, WEB PUSH & ROUTINE INTELLIGENCE
+// ============================================================================
+
+export async function respondToNotificationAction(formData: FormData) {
+  const userId = await requireUserId();
+  const notificationId = String(formData.get("notificationId") ?? "").trim();
+  const responseValue = String(formData.get("responseValue") ?? "").trim();
+  const responseNote = String(formData.get("responseNote") ?? "").trim() || null;
+  const lifeAreaId = String(formData.get("lifeAreaId") ?? "").trim() || null;
+  const durationMinutesRaw = parseInt(
+    String(formData.get("durationMinutes") ?? "45"),
+    10
+  );
+
+  if (!notificationId || !responseValue) return;
+
+  await respondToNotification(userId, notificationId, {
+    responseValue,
+    responseNote,
+    lifeAreaId,
+    durationMinutes: Number.isNaN(durationMinutesRaw) ? 45 : durationMinutesRaw,
+  });
+
+  revalidateAllOrbitViews();
+}
+
+export async function updateUserPreferencesAction(formData: FormData) {
+  const userId = await requireUserId();
+
+  const ianaTimeZone =
+    String(formData.get("ianaTimeZone") ?? "").trim() || "Africa/Lagos";
+  const morningBriefingEnabled =
+    formData.get("morningBriefingEnabled") === "on";
+  const morningBriefingTime =
+    String(formData.get("morningBriefingTime") ?? "").trim() || "07:30";
+  const declaredWakeTime =
+    String(formData.get("declaredWakeTime") ?? "").trim() || "07:00";
+  const declaredSleepTime =
+    String(formData.get("declaredSleepTime") ?? "").trim() || "23:00";
+  const quietHoursEnabled = formData.get("quietHoursEnabled") === "on";
+  const quietHoursStart =
+    String(formData.get("quietHoursStart") ?? "").trim() || "22:00";
+  const quietHoursEnd =
+    String(formData.get("quietHoursEnd") ?? "").trim() || "07:00";
+
+  const maxDailyRaw = parseInt(
+    String(formData.get("maxDailyCheckIns") ?? "6"),
+    10
+  );
+  const preReminderRaw = parseInt(
+    String(formData.get("defaultPreTaskReminderMin") ?? "30"),
+    10
+  );
+  const minGapRaw = parseInt(
+    String(formData.get("minMinutesBetweenCheckIns") ?? "120"),
+    10
+  );
+
+  const randomCheckInsEnabled =
+    formData.get("randomCheckInsEnabled") === "on";
+  const checkInFrequency =
+    (formData.get("checkInFrequency") as CheckInFrequency) ||
+    CheckInFrequency.BALANCED;
+
+  await updateUserPreferences(userId, {
+    ianaTimeZone,
+    morningBriefingEnabled,
+    morningBriefingTime,
+    declaredWakeTime,
+    declaredSleepTime,
+    quietHoursEnabled,
+    quietHoursStart,
+    quietHoursEnd,
+    maxDailyCheckIns: Number.isNaN(maxDailyRaw) ? 6 : maxDailyRaw,
+    defaultPreTaskReminderMin: Number.isNaN(preReminderRaw)
+      ? 30
+      : preReminderRaw,
+    randomCheckInsEnabled,
+    checkInFrequency,
+    minMinutesBetweenCheckIns: Number.isNaN(minGapRaw) ? 120 : minGapRaw,
+  });
+
+  revalidateAllOrbitViews();
+}
+
+export async function triggerProactiveCheckInAction(
+  kind: "MORNING_BRIEFING" | "TASK_CHECKIN" | "RANDOM_CHECKIN"
+): Promise<{ ok: boolean; notificationId?: string; message: string }> {
+  const userId = await requireUserId();
+
+  if (kind === "MORNING_BRIEFING") {
+    const res = await generateMorningBriefingForUser(userId, new Date(), {
+      force: true,
+    });
+    revalidateAllOrbitViews();
+    return {
+      ok: Boolean(res.notification),
+      notificationId: res.notification?.id,
+      message: res.notification
+        ? "Morning briefing sent"
+        : "Could not create briefing",
+    };
+  }
+
+  if (kind === "TASK_CHECKIN") {
+    const res = await generateTaskCheckInSample(userId, new Date());
+    revalidateAllOrbitViews();
+    return {
+      ok: Boolean(res.notification),
+      notificationId: res.notification?.id,
+      message: res.notification
+        ? "Task check-in sent"
+        : "Could not create check-in",
+    };
+  }
+
+  const res = await generateRandomActivityCheckIn(userId, new Date(), {
+    force: true,
+  });
+  revalidateAllOrbitViews();
+  return {
+    ok: Boolean(res.notification),
+    notificationId: res.notification?.id,
+    message: res.notification
+      ? "Activity check-in sent"
+      : "Could not create check-in",
+  };
+}
+
+export async function sendTestWebPushAction(): Promise<{
+  attempted: number;
+  delivered: number;
+}> {
+  const userId = await requireUserId();
+  const res = await sendPushToUserDevices(userId, {
+    title: "Orbit push active",
+    body: "Proactive check-ins will reach this device.",
+    actionUrl: "/settings",
+    tag: "orbit-push-test",
+  });
+  revalidatePath("/settings");
+  return { attempted: res.attempted, delivered: res.delivered };
+}
+
+export async function removePushSubscriptionAction(formData: FormData) {
+  const userId = await requireUserId();
+  const subscriptionId = String(formData.get("subscriptionId") ?? "").trim();
+  if (!subscriptionId) return;
+
+  await removeUserPushSubscription(userId, subscriptionId);
+  revalidatePath("/settings");
+}
+
+export async function evaluateRoutinesNowAction(): Promise<{
+  evaluatedActivities: number;
+  createdCount: number;
+}> {
+  const userId = await requireUserId();
+  const res = await evaluateUserRoutineIntelligence(userId);
+  revalidateAllOrbitViews();
+  return res;
+}
+
 

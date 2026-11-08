@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { OrbitToastProvider } from "@/components/ui/orbit-toast";
+import { ServiceWorkerRegistrar } from "@/components/shell/service-worker-registrar";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -9,10 +10,15 @@ export const metadata: Metadata = {
   },
   description: "Your commitments, projects and time in one place.",
   applicationName: "Orbit",
+  manifest: "/manifest.webmanifest",
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
     title: "Orbit",
+  },
+  icons: {
+    icon: "/icon-192.png",
+    apple: "/apple-touch-icon.png",
   },
 };
 
@@ -32,7 +38,10 @@ export default function RootLayout({
   return (
     <html lang="en" data-theme="orbit">
       <body className="min-h-dvh">
-        <OrbitToastProvider>{children}</OrbitToastProvider>
+        <OrbitToastProvider>
+          <ServiceWorkerRegistrar />
+          {children}
+        </OrbitToastProvider>
       </body>
     </html>
   );

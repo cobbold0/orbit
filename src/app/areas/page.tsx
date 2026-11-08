@@ -1,6 +1,6 @@
 import { getCurrentUser } from "@/lib/auth/session";
 import { getLifeAreasAndProjectsData } from "@/modules/life-areas/life-area-service";
-import { getUnreviewedInboxActionCount } from "@/lib/shell-data";
+import { getShellBadgeCounts } from "@/lib/shell-data";
 import { OrbitShell } from "@/components/shell/orbit-shell";
 import { PageHeader } from "@/components/ui/page";
 import { CreateAreaModal } from "@/components/modals/area-modal";
@@ -15,9 +15,9 @@ export default async function AreasPage() {
   const user = await getCurrentUser();
   if (!user) return null;
 
-  const [data, unreviewedInboxCount] = await Promise.all([
+  const [data, badges] = await Promise.all([
     getLifeAreasAndProjectsData(user.id),
-    getUnreviewedInboxActionCount(user.id),
+    getShellBadgeCounts(user.id),
   ]);
 
   const activeAreas: AreaCardItem[] = data.lifeAreas.map((a) => ({
@@ -58,7 +58,8 @@ export default async function AreasPage() {
     <OrbitShell
       lifeAreas={data.lifeAreas}
       projects={shellProjects}
-      unreviewedInboxCount={unreviewedInboxCount}
+      unreviewedInboxCount={badges.unreviewedInboxCount}
+      unreadCheckInCount={badges.unreadCheckInCount}
     >
       <div className="page">
         <PageHeader title="Areas">
