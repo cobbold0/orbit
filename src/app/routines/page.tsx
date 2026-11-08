@@ -79,6 +79,11 @@ export default async function ActivityPage() {
           colorToken: r.lifeArea.colorToken,
         }
       : null,
+    lifeAreaId: r.lifeAreaId,
+    kind: r.kind,
+    daysOfWeek: r.daysOfWeek,
+    startTimeLocal: r.startTimeLocal,
+    endTimeLocal: r.endTimeLocal,
   }));
 
   const suggestedRoutines: RoutineItem[] = data.suggestedRoutines.map((r) => ({

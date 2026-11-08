@@ -17,6 +17,7 @@ import {
 } from "@/components/modals/project-modal";
 import {
   CreateRoutineModal,
+  EditRoutineModal,
   LogActivityModal,
 } from "@/components/modals/activity-modals";
 
@@ -26,6 +27,11 @@ export interface SingleAreaRoutineItem {
   daysLabel: string;
   timeRangeLabel: string;
   physicalLocation: string | null;
+  lifeAreaId?: string | null;
+  kind?: string;
+  daysOfWeek?: number[];
+  startTimeLocal?: string;
+  endTimeLocal?: string;
 }
 
 export interface SingleAreaActivityItem {
@@ -169,7 +175,7 @@ export function SingleAreaClient({
               </p>
             ) : (
               routines.map((r) => (
-                <div key={r.id} className="orbit-row">
+                <div key={r.id} className="orbit-row items-center justify-between">
                   <div className="orbit-row-main">
                     <p className="title">{r.title}</p>
                     <p className="meta flex flex-wrap gap-x-3">
@@ -179,6 +185,21 @@ export function SingleAreaClient({
                     {r.physicalLocation && (
                       <p className="meta-soft">{r.physicalLocation}</p>
                     )}
+                  </div>
+                  <div className="shrink-0">
+                    <EditRoutineModal
+                      routine={{
+                        id: r.id,
+                        title: r.title,
+                        lifeAreaId: r.lifeAreaId ?? areaId,
+                        kind: r.kind,
+                        daysOfWeek: r.daysOfWeek ?? [1, 2, 3, 4, 5],
+                        startTimeLocal: r.startTimeLocal ?? "09:00",
+                        endTimeLocal: r.endTimeLocal ?? "17:00",
+                        physicalLocation: r.physicalLocation,
+                      }}
+                      lifeAreas={areaOptions}
+                    />
                   </div>
                 </div>
               ))

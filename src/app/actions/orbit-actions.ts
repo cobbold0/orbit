@@ -27,15 +27,19 @@ import {
   createProjectOrJourney,
   cycleMilestoneStatus,
   deleteLifeArea,
+  deleteMilestone,
   reorderLifeAreas,
   updateLifeArea,
+  updateMilestone,
   updateProjectOrJourney,
 } from "@/modules/life-areas/life-area-service";
 import {
   createDeclaredRoutine,
+  deleteRoutine,
   logExplicitActivityCheckIn,
   resolveInferredActivity,
   resolveSuggestedRoutine,
+  updateDeclaredRoutine,
 } from "@/modules/activity/activity-service";
 import {
   approveAllActionableForEntry,
@@ -406,6 +410,46 @@ export async function createRoutineAction(formData: FormData) {
   revalidateAllOrbitViews();
 }
 
+export async function updateRoutineAction(formData: FormData) {
+  const userId = await requireUserId();
+  const routineId = String(formData.get("routineId") ?? "").trim();
+  if (!routineId) return;
+
+  const title = String(formData.get("title") ?? "").trim();
+  const lifeAreaId = String(formData.get("lifeAreaId") ?? "").trim() || null;
+  const kind = (formData.get("kind") as RoutineKind) || undefined;
+  const startTimeLocal =
+    String(formData.get("startTimeLocal") ?? "").trim() || undefined;
+  const endTimeLocal =
+    String(formData.get("endTimeLocal") ?? "").trim() || undefined;
+  const physicalLocation = String(formData.get("physicalLocation") ?? "").trim();
+  const daysOfWeek = formData
+    .getAll("daysOfWeek")
+    .map((v) => parseInt(String(v), 10))
+    .filter((n) => !Number.isNaN(n) && n >= 1 && n <= 7);
+
+  await updateDeclaredRoutine(userId, routineId, {
+    ...(title ? { title } : {}),
+    lifeAreaId,
+    kind,
+    startTimeLocal,
+    endTimeLocal,
+    physicalLocation,
+    daysOfWeek: daysOfWeek.length > 0 ? daysOfWeek : undefined,
+  });
+
+  revalidateAllOrbitViews();
+}
+
+export async function deleteRoutineAction(formData: FormData) {
+  const userId = await requireUserId();
+  const routineId = String(formData.get("routineId") ?? "").trim();
+  if (!routineId) return;
+
+  await deleteRoutine(userId, routineId);
+  revalidateAllOrbitViews();
+}
+
 export async function createProjectAction(formData: FormData) {
   const userId = await requireUserId();
   const lifeAreaId = String(formData.get("lifeAreaId") ?? "").trim();
@@ -450,6 +494,25 @@ export async function addMilestoneAction(formData: FormData) {
   if (!projectId || !title) return;
 
   await addMilestoneToProject(userId, projectId, title);
+  revalidateAllOrbitViews();
+}
+
+export async function updateMilestoneAction(formData: FormData) {
+  const userId = await requireUserId();
+  const milestoneId = String(formData.get("milestoneId") ?? "").trim();
+  const title = String(formData.get("title") ?? "").trim();
+  if (!milestoneId || !title) return;
+
+  await updateMilestone(userId, milestoneId, title);
+  revalidateAllOrbitViews();
+}
+
+export async function deleteMilestoneAction(formData: FormData) {
+  const userId = await requireUserId();
+  const milestoneId = String(formData.get("milestoneId") ?? "").trim();
+  if (!milestoneId) return;
+
+  await deleteMilestone(userId, milestoneId);
   revalidateAllOrbitViews();
 }
 

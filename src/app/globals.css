@@ -121,17 +121,18 @@ dialog.modal::backdrop {
   border-color: rgb(20 23 28 / 0.2);
 }
 
-/* Accessible skip link / visually hidden utility */
-.visually-hidden:where(:not(:focus-within, :active)) {
+/* Accessible visually hidden utility (always hidden, zero layout shift) */
+.visually-hidden {
   position: absolute !important;
-  clip-path: inset(50%) !important;
-  overflow: hidden !important;
   width: 1px !important;
   height: 1px !important;
-  margin: -1px !important;
   padding: 0 !important;
-  border: 0 !important;
+  margin: -1px !important;
+  overflow: hidden !important;
+  clip: rect(0, 0, 0, 0) !important;
+  clip-path: inset(50%) !important;
   white-space: nowrap !important;
+  border: 0 !important;
 }
 
 @layer components {

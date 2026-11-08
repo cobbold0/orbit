@@ -286,3 +286,65 @@ export async function createDeclaredRoutine(
     },
   });
 }
+
+export async function updateDeclaredRoutine(
+  userId: string,
+  routineId: string,
+  input: {
+    title?: string;
+    lifeAreaId?: string | null;
+    kind?: RoutineKind;
+    daysOfWeek?: number[];
+    startTimeLocal?: string;
+    endTimeLocal?: string;
+    physicalLocation?: string | null;
+    isActive?: boolean;
+  }
+) {
+  const existing = await prisma.routine.findFirst({
+    where: { id: routineId, userId },
+  });
+  if (!existing) throw new Error("Routine not found");
+
+  let validAreaId: string | null | undefined = undefined;
+  if (input.lifeAreaId !== undefined) {
+    if (input.lifeAreaId) {
+      const area = await prisma.lifeArea.findFirst({
+        where: { id: input.lifeAreaId, userId },
+        select: { id: true },
+      });
+      validAreaId = area ? area.id : null;
+    } else {
+      validAreaId = null;
+    }
+  }
+
+  return prisma.routine.update({
+    where: { id: routineId },
+    data: {
+      ...(input.title !== undefined ? { title: input.title.trim() } : {}),
+      ...(validAreaId !== undefined ? { lifeAreaId: validAreaId } : {}),
+      ...(input.kind ? { kind: input.kind } : {}),
+      ...(input.daysOfWeek && input.daysOfWeek.length > 0
+        ? { daysOfWeek: input.daysOfWeek }
+        : {}),
+      ...(input.startTimeLocal ? { startTimeLocal: input.startTimeLocal } : {}),
+      ...(input.endTimeLocal ? { endTimeLocal: input.endTimeLocal } : {}),
+      ...(input.physicalLocation !== undefined
+        ? { physicalLocation: input.physicalLocation?.trim() || null }
+        : {}),
+      ...(input.isActive !== undefined ? { isActive: input.isActive } : {}),
+    },
+  });
+}
+
+export async function deleteRoutine(userId: string, routineId: string) {
+  const existing = await prisma.routine.findFirst({
+    where: { id: routineId, userId },
+  });
+  if (!existing) throw new Error("Routine not found");
+
+  return prisma.routine.delete({
+    where: { id: routineId },
+  });
+}

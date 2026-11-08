@@ -361,6 +361,35 @@ export async function cycleMilestoneStatus(
   });
 }
 
+export async function updateMilestone(
+  userId: string,
+  milestoneId: string,
+  title: string
+) {
+  const milestone = await prisma.projectMilestone.findFirst({
+    where: { id: milestoneId, project: { userId } },
+  });
+  if (!milestone) throw new Error("Milestone not found");
+
+  return prisma.projectMilestone.update({
+    where: { id: milestone.id },
+    data: {
+      title: title.trim(),
+    },
+  });
+}
+
+export async function deleteMilestone(userId: string, milestoneId: string) {
+  const milestone = await prisma.projectMilestone.findFirst({
+    where: { id: milestoneId, project: { userId } },
+  });
+  if (!milestone) throw new Error("Milestone not found");
+
+  return prisma.projectMilestone.delete({
+    where: { id: milestone.id },
+  });
+}
+
 export async function updateProjectOrJourney(
   userId: string,
   projectId: string,

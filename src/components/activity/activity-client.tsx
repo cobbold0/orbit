@@ -7,6 +7,7 @@ import { Check, RefreshCw } from "lucide-react";
 import { AreaLabel, Card, PageHeader } from "@/components/ui/page";
 import {
   CreateRoutineModal,
+  EditRoutineModal,
   LogActivityModal,
   type ActivityAreaOption,
 } from "@/components/modals/activity-modals";
@@ -51,6 +52,11 @@ export interface RoutineItem {
     name: string;
     colorToken: string;
   } | null;
+  lifeAreaId?: string | null;
+  kind?: string;
+  daysOfWeek?: number[];
+  startTimeLocal?: string;
+  endTimeLocal?: string;
 }
 
 export function ActivityClient({
@@ -331,7 +337,7 @@ export function ActivityClient({
               </div>
             ) : (
               declaredRoutines.map((r) => (
-                <div key={r.id} className="orbit-row">
+                <div key={r.id} className="orbit-row items-center justify-between">
                   <div className="orbit-row-main">
                     <p className="title">{r.title}</p>
                     <p className="meta flex flex-wrap items-center gap-x-3">
@@ -347,6 +353,21 @@ export function ActivityClient({
                     {r.physicalLocation && (
                       <p className="meta-soft">{r.physicalLocation}</p>
                     )}
+                  </div>
+                  <div className="shrink-0">
+                    <EditRoutineModal
+                      routine={{
+                        id: r.id,
+                        title: r.title,
+                        lifeAreaId: r.lifeAreaId,
+                        kind: r.kind,
+                        daysOfWeek: r.daysOfWeek ?? [1, 2, 3, 4, 5],
+                        startTimeLocal: r.startTimeLocal ?? "09:00",
+                        endTimeLocal: r.endTimeLocal ?? "17:00",
+                        physicalLocation: r.physicalLocation,
+                      }}
+                      lifeAreas={areaOptions}
+                    />
                   </div>
                 </div>
               ))

@@ -89,6 +89,11 @@ export default async function SingleAreaPage({ params }: SingleAreaPageProps) {
     daysLabel: formatDays(r.daysOfWeek),
     timeRangeLabel: `${r.startTimeLocal} to ${r.endTimeLocal}`,
     physicalLocation: r.physicalLocation,
+    lifeAreaId: r.lifeAreaId,
+    kind: r.kind,
+    daysOfWeek: r.daysOfWeek,
+    startTimeLocal: r.startTimeLocal,
+    endTimeLocal: r.endTimeLocal,
   }));
 
   const activityItems: SingleAreaActivityItem[] = area.activityRecords.map(

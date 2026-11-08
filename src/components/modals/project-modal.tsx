@@ -1,9 +1,11 @@
 "use client";
 
 import React, { useId, useRef, useState } from "react";
-import { Pencil, Plus } from "lucide-react";
+import { Loader2, Pencil, Plus, Trash2 } from "lucide-react";
 import {
+  addMilestoneAction,
   createProjectAction,
+  deleteMilestoneAction,
   updateProjectAction,
 } from "@/app/actions/orbit-actions";
 import { OrbitModal, SubmitButton } from "@/components/ui/orbit-modal";
@@ -20,6 +22,11 @@ export interface EditableProjectShape {
   description: string | null;
   lifeAreaId: string;
   kind: "PROJECT" | "JOURNEY";
+  milestones?: {
+    id: string;
+    title: string;
+    status: "UPCOMING" | "IN_PROGRESS" | "COMPLETED";
+  }[];
 }
 
 interface ProjectModalProps {
@@ -48,6 +55,12 @@ export function ProjectModal({
   const [kind, setKind] = useState<"PROJECT" | "JOURNEY">(
     project?.kind ?? "PROJECT"
   );
+  const [milestones, setMilestones] = useState<
+    { id: string; title: string; status: "UPCOMING" | "IN_PROGRESS" | "COMPLETED" }[]
+  >(project?.milestones ?? []);
+  const [newMilestoneTitle, setNewMilestoneTitle] = useState("");
+  const [isAddingMilestone, setIsAddingMilestone] = useState(false);
+  const [deletingMilestoneId, setDeletingMilestoneId] = useState<string | null>(null);
 
   const label = triggerLabel ?? (mode === "create" ? "New project" : "Edit");
   const buttonClass =
@@ -58,8 +71,48 @@ export function ProjectModal({
     const dialog = dialogRef.current;
     if (!dialog || dialog.open) return;
     setKind(project?.kind ?? "PROJECT");
+    setMilestones(project?.milestones ?? []);
+    setNewMilestoneTitle("");
     dialog.showModal();
     setTimeout(() => titleInputRef.current?.focus(), 20);
+  }
+
+  async function handleAddMilestone() {
+    if (!project || !newMilestoneTitle.trim() || isAddingMilestone) return;
+    setIsAddingMilestone(true);
+    const titleToAdd = newMilestoneTitle.trim();
+    try {
+      const fd = new FormData();
+      fd.append("projectId", project.id);
+      fd.append("title", titleToAdd);
+      await addMilestoneAction(fd);
+      setMilestones((prev) => [
+        ...prev,
+        {
+          id: `temp_${Date.now()}`,
+          title: titleToAdd,
+          status: "UPCOMING",
+        },
+      ]);
+      setNewMilestoneTitle("");
+      notify("Milestone added");
+    } finally {
+      setIsAddingMilestone(false);
+    }
+  }
+
+  async function handleDeleteMilestone(milestoneId: string) {
+    if (deletingMilestoneId) return;
+    setDeletingMilestoneId(milestoneId);
+    try {
+      const fd = new FormData();
+      fd.append("milestoneId", milestoneId);
+      await deleteMilestoneAction(fd);
+      setMilestones((prev) => prev.filter((m) => m.id !== milestoneId));
+      notify("Milestone removed");
+    } finally {
+      setDeletingMilestoneId(null);
+    }
   }
 
   function close() {
@@ -185,7 +238,7 @@ export function ProjectModal({
             />
           </fieldset>
 
-          {mode === "create" && (
+          {mode === "create" ? (
             <fieldset className="fieldset">
               <label htmlFor={`${idBase}-ms`} className="fieldset-legend">
                 Milestones, one per line (optional)
@@ -197,6 +250,86 @@ export function ProjectModal({
                 placeholder={"Finalise scope\nBuild first version\nReview with team"}
                 className="textarea w-full"
               />
+            </fieldset>
+          ) : (
+            <fieldset className="fieldset">
+              <legend className="fieldset-legend flex items-center justify-between w-full">
+                <span>Milestones ({milestones.length})</span>
+                <span className="text-xs text-base-content/50 font-normal">
+                  Remove or add milestones
+                </span>
+              </legend>
+
+              {milestones.length === 0 ? (
+                <p className="text-xs text-base-content/50 italic py-1">
+                  No milestones for this project yet.
+                </p>
+              ) : (
+                <ul className="space-y-1.5 max-h-48 overflow-y-auto py-1">
+                  {milestones.map((ms) => {
+                    const isDeletingThis = deletingMilestoneId === ms.id;
+                    return (
+                      <li
+                        key={ms.id}
+                        className="flex items-center justify-between gap-2 px-3 py-2 rounded-xl bg-base-200/50 border border-base-300/70 text-sm"
+                      >
+                        <span
+                          className={`flex-1 truncate ${
+                            ms.status === "COMPLETED"
+                              ? "line-through text-base-content/50"
+                              : "text-base-content font-medium"
+                          }`}
+                        >
+                          {ms.title}
+                        </span>
+                        <button
+                          type="button"
+                          disabled={isDeletingThis}
+                          onClick={() => handleDeleteMilestone(ms.id)}
+                          aria-label={`Remove milestone ${ms.title}`}
+                          className="btn btn-ghost btn-xs text-error hover:bg-error/10 px-1.5 h-7 min-h-7"
+                        >
+                          {isDeletingThis ? (
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          ) : (
+                            <Trash2 className="h-3.5 w-3.5" />
+                          )}
+                        </button>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+
+              {/* Add milestone inline row */}
+              <div className="flex items-center gap-2 pt-1.5">
+                <input
+                  type="text"
+                  value={newMilestoneTitle}
+                  onChange={(e) => setNewMilestoneTitle(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      void handleAddMilestone();
+                    }
+                  }}
+                  placeholder="New milestone..."
+                  className="input input-sm flex-1"
+                />
+                <button
+                  type="button"
+                  onClick={() => void handleAddMilestone()}
+                  disabled={!newMilestoneTitle.trim() || isAddingMilestone}
+                  className="btn btn-secondary btn-sm gap-1 shrink-0"
+                >
+                  {isAddingMilestone ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <Plus className="h-3.5 w-3.5" />
+                  )}
+                  <span>Add</span>
+                </button>
+              </div>
             </fieldset>
           )}
 

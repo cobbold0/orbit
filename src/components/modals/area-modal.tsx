@@ -55,33 +55,28 @@ function IconPickerField({
   return (
     <fieldset className="fieldset">
       <legend className="fieldset-legend">Icon</legend>
+      <input type="hidden" name="iconName" value={value} />
       <div className="grid grid-cols-5 gap-1.5 pt-1 sm:grid-cols-7">
         {LIFE_AREA_ICON_OPTIONS.map((opt) => {
           const Icon = getAreaIconComponent(opt.name);
           const selected = value === opt.name;
           return (
-            <label
+            <button
               key={opt.name}
+              type="button"
               aria-label={opt.label}
-              className={`flex min-h-11 cursor-pointer flex-col items-center justify-center gap-0.5 rounded-xl border px-1 py-1.5 text-center transition-colors ${
+              onClick={() => onChange(opt.name)}
+              className={`flex min-h-11 cursor-pointer flex-col items-center justify-center gap-0.5 rounded-xl border px-1 py-1.5 text-center transition-all select-none active:scale-95 ${
                 selected
-                  ? `${style.badgeBgClass} ${style.badgeTextClass} border-base-content/40 font-semibold`
+                  ? `${style.badgeBgClass} ${style.badgeTextClass} border-base-content/40 font-semibold shadow-xs`
                   : "border-base-300 bg-base-100 text-[var(--text-2)] hover:bg-base-200"
               }`}
             >
-              <input
-                type="radio"
-                name="iconName"
-                value={opt.name}
-                checked={selected}
-                onChange={() => onChange(opt.name)}
-                className="visually-hidden"
-              />
               <Icon className="h-4 w-4 shrink-0" aria-hidden="true" />
               <span className="max-w-full truncate text-[0.6875rem] leading-tight">
                 {opt.label}
               </span>
-            </label>
+            </button>
           );
         })}
       </div>
@@ -99,27 +94,22 @@ function ColorPickerField({
   return (
     <fieldset className="fieldset">
       <legend className="fieldset-legend">Colour</legend>
+      <input type="hidden" name="colorToken" value={value} />
       <div className="flex flex-wrap gap-2 pt-1">
         {COLOR_OPTIONS.map((style) => {
           const selected = value === style.token;
           return (
-            <label
+            <button
               key={style.token}
-              className={`btn btn-sm cursor-pointer ${
-                selected ? "btn-neutral" : "btn-secondary"
+              type="button"
+              onClick={() => onChange(style.token)}
+              className={`btn btn-sm cursor-pointer select-none active:scale-95 transition-all gap-1.5 ${
+                selected ? "btn-neutral font-semibold" : "btn-secondary"
               }`}
             >
-              <input
-                type="radio"
-                name="colorToken"
-                value={style.token}
-                checked={selected}
-                onChange={() => onChange(style.token)}
-                className="visually-hidden"
-              />
               <AreaDot token={style.token} />
               <span>{style.label}</span>
-            </label>
+            </button>
           );
         })}
       </div>
