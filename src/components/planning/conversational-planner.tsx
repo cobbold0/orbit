@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useId, useState } from "react";
-import { Check, SendHorizontal } from "lucide-react";
+import { Check, MessageSquare, SendHorizontal } from "lucide-react";
 import {
   applyProposedMutationAction,
   askOrbitPlannerAction,
@@ -14,7 +14,15 @@ import { toPlainText } from "@/lib/time/format";
 import { Card } from "@/components/ui/page";
 import { useOrbitToast } from "@/components/ui/orbit-toast";
 
-export function ConversationalPlanner() {
+interface ConversationalPlannerProps {
+  embedded?: boolean;
+  placeholder?: string;
+}
+
+export function ConversationalPlanner({
+  embedded = false,
+  placeholder = "Ask Orbit to plan, move or update a commitment...",
+}: ConversationalPlannerProps = {}) {
   const inputId = useId();
   const [prompt, setPrompt] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -52,36 +60,42 @@ export function ConversationalPlanner() {
     }
   }
 
-  return (
-    <Card title="Ask Orbit">
+  const content = (
+    <div className="w-full">
       <form
         onSubmit={(e) => {
           e.preventDefault();
           void submit();
         }}
-        className="mt-2 flex items-center gap-2"
+        className="flex items-center gap-2"
       >
         <label htmlFor={inputId} className="visually-hidden">
           Ask Orbit to plan, move or find something
         </label>
-        <input
-          id={inputId}
-          type="text"
-          value={prompt}
-          autoComplete="off"
-          onChange={(e) => setPrompt(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" && e.nativeEvent.isComposing) {
-              e.preventDefault();
-            }
-          }}
-          placeholder="Move dashboard to Friday"
-          className="input min-w-0 flex-1 bg-base-100"
-        />
+        <div className="relative min-w-0 flex-1">
+          <MessageSquare
+            className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-base-content/40 pointer-events-none"
+            aria-hidden="true"
+          />
+          <input
+            id={inputId}
+            type="text"
+            value={prompt}
+            autoComplete="off"
+            onChange={(e) => setPrompt(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && e.nativeEvent.isComposing) {
+                e.preventDefault();
+              }
+            }}
+            placeholder={placeholder}
+            className="input input-bordered w-full pl-9 text-sm bg-base-100"
+          />
+        </div>
         <button
           type="submit"
           disabled={isLoading || !prompt.trim()}
-          className="btn btn-primary shrink-0"
+          className="btn btn-primary btn-sm sm:btn-md shrink-0 gap-1.5"
         >
           {isLoading ? (
             <span
@@ -91,27 +105,34 @@ export function ConversationalPlanner() {
           ) : (
             <SendHorizontal className="h-4 w-4" aria-hidden="true" />
           )}
-          <span>{isLoading ? "Working" : "Ask"}</span>
+          <span className="hidden sm:inline">
+            {isLoading ? "Working..." : "Ask"}
+          </span>
         </button>
       </form>
 
       <div aria-live="polite">
         {error && (
-          <p role="alert" className="mt-3 text-[0.9375rem] font-medium text-error">
+          <p
+            role="alert"
+            className="mt-3 text-[0.9375rem] font-medium text-error"
+          >
             {error}
           </p>
         )}
 
         {result && (
-          <div className="mt-4">
-            <p className="whitespace-pre-line">
+          <div className="mt-4 p-4 rounded-xl bg-base-200/50 border border-base-300/60">
+            <p className="whitespace-pre-line text-sm leading-relaxed">
               {toPlainText(result.replyMarkdown)}
             </p>
 
             {result.citedFacts.length > 0 && (
-              <div className="mt-4">
-                <h3 className="h3">From your data</h3>
-                <ul className="meta mt-1 list-disc space-y-1 ps-5">
+              <div className="mt-3">
+                <h4 className="text-xs font-semibold text-base-content/70 uppercase tracking-wider">
+                  From your data
+                </h4>
+                <ul className="meta mt-1 list-disc space-y-1 ps-5 text-xs">
                   {result.citedFacts.map((f, i) => (
                     <li key={i}>{toPlainText(f)}</li>
                   ))}
@@ -120,9 +141,11 @@ export function ConversationalPlanner() {
             )}
 
             {result.assumptionsOrSuggestions.length > 0 && (
-              <div className="mt-4">
-                <h3 className="h3">Assumed</h3>
-                <ul className="meta mt-1 list-disc space-y-1 ps-5">
+              <div className="mt-3">
+                <h4 className="text-xs font-semibold text-base-content/70 uppercase tracking-wider">
+                  Assumed
+                </h4>
+                <ul className="meta mt-1 list-disc space-y-1 ps-5 text-xs">
                   {result.assumptionsOrSuggestions.map((a, i) => (
                     <li key={i}>{toPlainText(a)}</li>
                   ))}
@@ -131,19 +154,21 @@ export function ConversationalPlanner() {
             )}
 
             {result.proposedMutations.length > 0 && (
-              <div className="mt-3">
+              <div className="mt-3 space-y-2">
                 {result.proposedMutations.map((mut, i) => (
                   <div key={i} className="orbit-row">
                     <div className="orbit-row-main">
-                      <p className="title">
+                      <p className="title text-sm">
                         {mut.mutationKind === "RESCHEDULE_TASK"
                           ? `Move "${mut.taskTitle}"`
                           : `Add "${mut.title}"`}
                       </p>
-                      <p className="meta">{toPlainText(mut.explanation)}</p>
+                      <p className="meta text-xs">
+                        {toPlainText(mut.explanation)}
+                      </p>
                     </div>
                     {applied[i] ? (
-                      <p className="meta inline-flex items-center gap-1.5 font-medium text-success">
+                      <p className="meta inline-flex items-center gap-1.5 font-medium text-success text-xs">
                         <Check className="h-4 w-4" aria-hidden="true" />
                         <span>Applied</span>
                       </p>
@@ -172,6 +197,12 @@ export function ConversationalPlanner() {
           </div>
         )}
       </div>
-    </Card>
+    </div>
   );
+
+  if (embedded) {
+    return content;
+  }
+
+  return <Card title="Ask Orbit">{content}</Card>;
 }
