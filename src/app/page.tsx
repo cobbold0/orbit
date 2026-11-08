@@ -9,6 +9,7 @@ import { getCurrentUser } from "@/lib/auth/session";
 import { getNowOverviewData } from "@/modules/now/now-service";
 import { OrbitShell } from "@/components/shell/orbit-shell";
 import { ConversationalPlanner } from "@/components/planning/conversational-planner";
+import { DailyDigestSpeaker } from "@/components/planning/daily-digest-speaker";
 import { AreaLabel, Card } from "@/components/ui/page";
 import { RescheduleTaskModal } from "@/components/modals/reschedule-task-modal";
 import { LogActivityModal } from "@/components/modals/activity-modals";
@@ -69,7 +70,7 @@ export default async function TodayPage() {
         ? "Good afternoon"
         : "Good evening";
 
-  const firstName = user.name ? user.name.split(" ")[0] : "there";
+  const firstName = user.name?.split(" ")[0] || "there";
 
   // Build conversational day narrative
   let narrative = "";
@@ -164,13 +165,37 @@ export default async function TodayPage() {
               )}
             </div>
 
-            <div>
-              <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-base-content">
-                {greeting}, {firstName}.
-              </h1>
-              <p className="mt-2 text-base sm:text-lg text-base-content/85 leading-relaxed font-normal max-w-3xl">
-                How are you doing today? {narrative}
-              </p>
+            <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+              <div className="min-w-0 flex-1">
+                <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-base-content">
+                  {greeting}, {firstName}.
+                </h1>
+                <p className="mt-2 text-base sm:text-lg text-base-content/85 leading-relaxed font-normal max-w-3xl">
+                  How are you doing today? {narrative}
+                </p>
+              </div>
+
+              <DailyDigestSpeaker
+                firstName={firstName}
+                greeting={greeting}
+                dateStr={formatLongDate(data.wallClock.localDate)}
+                activeCommitment={data.activeCommitment?.title}
+                scheduledTasks={data.scheduledToday.map((t) => ({
+                  title: t.title,
+                  area: t.lifeArea.name,
+                  time: t.scheduledStart ? formatClock(t.scheduledStart, tz) : undefined,
+                }))}
+                flexibleTasks={data.flexibleTasks.map((t) => ({
+                  title: t.title,
+                  area: t.lifeArea.name,
+                }))}
+                checkInCount={checkInCount}
+                location={
+                  loc
+                    ? `${loc.physicalLocation ?? loc.title} until ${loc.endTimeLocal}`
+                    : undefined
+                }
+              />
             </div>
 
             {/* Embedded Conversational Planner Action Bar */}
