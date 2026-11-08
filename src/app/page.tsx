@@ -12,6 +12,7 @@ import { ConversationalPlanner } from "@/components/planning/conversational-plan
 import { DailyDigestSpeaker } from "@/components/planning/daily-digest-speaker";
 import { AreaLabel, Card } from "@/components/ui/page";
 import { RescheduleTaskModal } from "@/components/modals/reschedule-task-modal";
+import { EditTaskModal } from "@/components/modals/edit-task-modal";
 import { LogActivityModal } from "@/components/modals/activity-modals";
 import { ActionSubmitButton } from "@/components/ui/action-button";
 import {
@@ -325,6 +326,15 @@ export default async function TodayPage() {
                     commitmentType="SCHEDULED"
                     triggerClassName="btn btn-ghost btn-sm"
                   />
+                  <EditTaskModal
+                    task={{
+                      id: task.id,
+                      title: task.title,
+                      lifeAreaId: task.lifeAreaId,
+                      estimatedMinutes: task.estimatedMinutes,
+                    }}
+                    lifeAreas={data.lifeAreas}
+                  />
                 </div>
               </div>
             ))}
@@ -407,6 +417,15 @@ export default async function TodayPage() {
                         </ActionSubmitButton>
                       </form>
                     )}
+                    <EditTaskModal
+                      task={{
+                        id: task.id,
+                        title: task.title,
+                        lifeAreaId: task.lifeAreaId,
+                        estimatedMinutes: task.estimatedMinutes,
+                      }}
+                      lifeAreas={data.lifeAreas}
+                    />
                     <form action={completeTaskAction}>
                       <input type="hidden" name="taskId" value={task.id} />
                       <ActionSubmitButton
@@ -461,6 +480,15 @@ export default async function TodayPage() {
                   </p>
                 </div>
                 <div className="orbit-row-actions">
+                  <EditTaskModal
+                    task={{
+                      id: task.id,
+                      title: task.title,
+                      lifeAreaId: task.lifeAreaId,
+                      estimatedMinutes: task.estimatedMinutes,
+                    }}
+                    lifeAreas={data.lifeAreas}
+                  />
                   <RescheduleTaskModal
                     taskId={task.id}
                     taskTitle={task.title}

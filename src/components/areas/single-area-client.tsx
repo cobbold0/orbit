@@ -135,7 +135,11 @@ export function SingleAreaClient({
       </div>
 
       {tab === "tasks" && (
-        <TasksCard tasks={tasks} showAreaLabel={false} />
+        <TasksCard
+          tasks={tasks}
+          lifeAreas={areaOptions}
+          showAreaLabel={false}
+        />
       )}
 
       {tab === "projects" &&

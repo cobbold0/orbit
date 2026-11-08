@@ -5,6 +5,7 @@ import {
   CaptureKind,
   CheckInFrequency,
   CommitmentType,
+  NotificationDeliveryStatus,
   ProjectKind,
   ProjectStatus,
   RoutineKind,
@@ -18,8 +19,10 @@ import {
   confirmTaskCompletion,
   createStructuredTask,
   createTaskWithQuickCapture,
+  deleteTask,
   markTaskStarted,
   rescheduleOrChangeCommitment,
+  updateTask,
 } from "@/modules/tasks/task-service";
 import {
   addMilestoneToProject,
@@ -168,6 +171,47 @@ export async function completeTaskAction(formData: FormData) {
   if (!taskId) return;
 
   await confirmTaskCompletion(userId, taskId);
+  revalidateAllOrbitViews();
+}
+
+export async function updateTaskAction(formData: FormData) {
+  const userId = await requireUserId();
+  const taskId = String(formData.get("taskId") ?? "").trim();
+  if (!taskId) return;
+
+  const title = String(formData.get("title") ?? "").trim();
+  const lifeAreaId =
+    String(formData.get("lifeAreaId") ?? "").trim() || undefined;
+  const projectId = formData.has("projectId")
+    ? String(formData.get("projectId") ?? "").trim() || null
+    : undefined;
+  const priority = (formData.get("priority") as TaskPriority) || undefined;
+  const estimatedRaw = formData.get("estimatedMinutes");
+  const estimatedMinutes = estimatedRaw
+    ? parseInt(String(estimatedRaw), 10)
+    : undefined;
+  const notes = formData.has("notes")
+    ? String(formData.get("notes") ?? "")
+    : undefined;
+
+  await updateTask(userId, taskId, {
+    ...(title ? { title } : {}),
+    lifeAreaId,
+    projectId,
+    priority,
+    estimatedMinutes: Number.isNaN(estimatedMinutes) ? undefined : estimatedMinutes,
+    notes,
+  });
+
+  revalidateAllOrbitViews();
+}
+
+export async function deleteTaskAction(formData: FormData) {
+  const userId = await requireUserId();
+  const taskId = String(formData.get("taskId") ?? "").trim();
+  if (!taskId) return;
+
+  await deleteTask(userId, taskId);
   revalidateAllOrbitViews();
 }
 
@@ -1175,53 +1219,59 @@ export async function processQuickVoiceCommandAction(
     };
   }
 
-  // Pattern C: Question, Advisory, Search, or Planning Query
-  // e.g. "Do I have anything today?", "What is on my schedule?", "What should I focus on?", "How does my day look?", "Can you move contract review to Friday?"
-  const isQuestionOrQuery =
-    /^(?:what|do\s+i|how|any|is\s+there|are\s+there|when|can\s+you|check|tell\s+me|should\s+i|where|summarize|give\s+me)\b/i.test(
-      trimmed
-    ) ||
-    /\b(?:do\s+i\s+have|what\s+do\s+i\s+have|what(?:'s|\s+is)\s+on|anything\s+today|my\s+schedule|my\s+agenda|what\s+should\s+i|focus\s+on)\b/i.test(
-      trimmed
-    ) ||
-    trimmed.endsWith("?");
+  // Route all planning requests, questions, and task commands through the contextual planner
+  // so Orbit matches Life Areas, asks for clarification when ambiguous, and lets the user confirm!
+  const planRes = await askOrbitPlannerAction(trimmed);
+  return {
+    ok: true,
+    intent: "QUERY",
+    title: trimmed,
+    summary: planRes.replyMarkdown,
+    planResponse: planRes,
+  };
+}
 
-  if (isQuestionOrQuery) {
-    const planRes = await askOrbitPlannerAction(trimmed);
-    return {
-      ok: true,
-      intent: "QUERY",
-      title: trimmed,
-      summary: planRes.replyMarkdown,
-      planResponse: planRes,
-    };
-  }
+export async function getRecentCheckInsAction(): Promise<{
+  id: string;
+  title: string;
+  body: string;
+  actionUrl: string;
+  status: string;
+  responseValue?: string | null;
+  createdAt: string;
+}[]> {
+  const userId = await requireUserId();
+  const notifs = await prisma.notification.findMany({
+    where: { userId },
+    orderBy: { createdAt: "desc" },
+    take: 15,
+  });
 
-  // Pattern D: Task (default or explicit)
-  // e.g. "Create a task to review contracts tomorrow", "Remind me to call John at 5pm", "Buy groceries"
-  const cleanedTask = trimmed
-    .replace(
-      /^(?:create|add|new|make)?\s*(?:a\s+)?(?:task|todo)?\s*(?:to|:|for)?\s*/i,
-      ""
-    )
-    .replace(/^(?:remind\s+me\s+to|need\s+to|i\s+need\s+to|have\s+to)\s*/i, "")
-    .trim();
+  return notifs.map((n) => ({
+    id: n.id,
+    title: n.title,
+    body: n.body,
+    actionUrl: n.actionUrl,
+    status: n.status,
+    responseValue: n.responseValue,
+    createdAt: n.createdAt.toISOString(),
+  }));
+}
 
-  const taskInput = cleanedTask || trimmed;
-  const created = await createTaskWithQuickCapture(userId, taskInput);
-  const area = await prisma.lifeArea.findUnique({
-    where: { id: created.lifeAreaId },
-    select: { name: true },
+export async function dismissNotificationAction(formData: FormData) {
+  const userId = await requireUserId();
+  const notificationId = String(formData.get("notificationId") ?? "").trim();
+  if (!notificationId) return;
+
+  await prisma.notification.updateMany({
+    where: { id: notificationId, userId },
+    data: {
+      status: NotificationDeliveryStatus.DISMISSED,
+      dismissedAt: new Date(),
+    },
   });
 
   revalidateAllOrbitViews();
-  return {
-    ok: true,
-    intent: "TASK",
-    title: created.title,
-    summary: `Task created (${created.commitmentType.toLowerCase()})`,
-    lifeAreaName: area?.name,
-  };
 }
 
 

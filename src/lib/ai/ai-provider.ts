@@ -328,6 +328,31 @@ export class DeterministicFallbackProvider implements AIProvider {
       ) && !/\b(?:what|which|show|summary|how)\b/i.test(trimmed);
 
     if (isCreateIntent) {
+      // Check if user mentioned an entity that doesn't match an existing area or project
+      const forEntityMatch = trimmed.match(/\b(?:for|under|in)\s+([A-Za-z0-9_-]+)/i);
+      const mentionedEntity = forEntityMatch?.[1];
+      const isEntityKnown =
+        !mentionedEntity ||
+        userContext.lifeAreas.some(
+          (a) => a.name.toLowerCase() === mentionedEntity.toLowerCase()
+        ) ||
+        userContext.activeProjects.some(
+          (p) => p.title.toLowerCase() === mentionedEntity.toLowerCase()
+        );
+
+      if (mentionedEntity && !isEntityKnown && userContext.lifeAreas.length > 0) {
+        const areaNames = userContext.lifeAreas.map((a) => a.name).join(", ");
+        return {
+          replyMarkdown: `I'd love to help with ${mentionedEntity}! Which Life Area should this task belong to (${areaNames}), or would you like to set up "${mentionedEntity}" as a new Life Area or Project first?`,
+          citedFacts: [`Available Life Areas: ${areaNames}`],
+          assumptionsOrSuggestions: [
+            `Please specify which Life Area should hold tasks for "${mentionedEntity}".`,
+          ],
+          proposedMutations: [],
+          providerUsed: "DETERMINISTIC_FALLBACK",
+        };
+      }
+
       const parsed = parseQuickCaptureInput(
         trimmed,
         userContext.lifeAreas,
@@ -594,6 +619,14 @@ CRITICAL SAFETY & GROUNDING RULES:
 3. Distinguish confirmed facts ("citedFacts") from recommendations or suggestions ("assumptionsOrSuggestions").
 4. Physical location, employer, active project, and availability are independent.
 5. Use short, direct, natural sentences. Never use double dashes (--) or em-dashes.
+6. TASK CREATION & DISAMBIGUATION RULES:
+   - When the user asks to create a task, check their available Life Areas and Projects in the context:
+   - If the user specifies or implies a matching Life Area (e.g. "under Basilissa", "for Everlyx", "in Health"), match it to that area's lifeAreaId.
+   - If the user mentions an entity, company, or topic (e.g., "for KFC", "for Acme") that does NOT clearly match any existing Life Area or Project:
+     * DO NOT create the task blindly under a random or default area!
+     * Ask the user for clarification in "replyMarkdown": e.g. "I'd love to help with KFC! Which Life Area should this belong to (e.g. Personal, Work), or would you like to create a new Life Area or Project for KFC first?"
+     * Leave "proposedMutations" empty so nothing is created blindly.
+   - If the request is clear, return a "CREATE_TASK" object in "proposedMutations" with the matched "lifeAreaId", "lifeAreaName", and clean "title" so the user can review and confirm it with one tap.
 
 User Context (JSON):
 ${JSON.stringify(userContext, null, 2)}

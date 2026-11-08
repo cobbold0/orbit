@@ -41,6 +41,7 @@ import { useOrbitToast } from "@/components/ui/orbit-toast";
 import { ExpandableFab } from "./expandable-fab";
 import { QuickVoiceDialog } from "./quick-voice-dialog";
 import { PwaInstallBanner } from "./pwa-install-banner";
+import { NotificationsSheet } from "@/components/notifications/notifications-sheet";
 
 export interface ShellLifeArea {
   id: string;
@@ -256,7 +257,8 @@ export function OrbitShell({
             </ul>
           </nav>
 
-          <div className="mt-auto border-t border-base-300/70 pt-3">
+          <div className="mt-auto border-t border-base-300/70 pt-3 space-y-1">
+            <NotificationsSheet unreadCount={unreadCheckInCount} isDesktop />
             {user && (
               <div className="dropdown dropdown-top w-full">
                 <div
@@ -327,17 +329,15 @@ export function OrbitShell({
                 Orbit
               </Link>
             </div>
-            <div className="navbar-end">
+            <div className="navbar-end flex items-center gap-2">
+              <NotificationsSheet unreadCount={unreadCheckInCount} />
               {user && (
                 <Link
                   href="/settings?tab=account"
                   aria-label="Account details"
-                  className="relative flex h-8 w-8 items-center justify-center rounded-full bg-primary/10 text-primary text-xs font-semibold hover:bg-primary/20 transition-colors"
+                  className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10 text-primary text-xs font-semibold hover:bg-primary/20 transition-colors"
                 >
                   {user.name ? user.name.slice(0, 2).toUpperCase() : "U"}
-                  {unreadCheckInCount > 0 && (
-                    <span className="absolute -top-0.5 -right-0.5 h-2.5 w-2.5 rounded-full bg-secondary ring-2 ring-base-100" />
-                  )}
                 </Link>
               )}
             </div>

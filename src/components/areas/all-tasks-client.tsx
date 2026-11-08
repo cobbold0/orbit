@@ -41,7 +41,11 @@ export function AllTasksClient({
         basePath="/areas/tasks"
         searchPlaceholder="Search tasks"
       />
-      <TasksCard tasks={filteredTasks} showAreaLabel={!selectedSlug} />
+      <TasksCard
+        tasks={filteredTasks}
+        lifeAreas={areas}
+        showAreaLabel={!selectedSlug}
+      />
     </div>
   );
 }

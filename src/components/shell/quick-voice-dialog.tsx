@@ -11,7 +11,6 @@ import {
   ListTodo,
   Loader2,
   Mic,
-  RotateCcw,
   Sparkles,
   Square,
   X,
@@ -591,8 +590,8 @@ export function QuickVoiceDialog({ isOpen, onClose }: QuickVoiceDialogProps) {
                     onClick={() => void startListening()}
                     className="btn btn-ghost btn-sm gap-1.5 text-xs text-base-content/70 hover:text-base-content"
                   >
-                    <RotateCcw className="h-3.5 w-3.5" />
-                    <span>Ask another question</span>
+                    <Mic className="h-3.5 w-3.5 text-primary" />
+                    <span>Speak to reply / clarify</span>
                   </button>
                   <button
                     type="button"

@@ -105,8 +105,7 @@ export function ProjectCard({
     }
   }
 
-  async function handleDelete(milestoneId: string, title: string) {
-    if (!confirm(`Remove milestone "${title}"?`)) return;
+  async function handleDelete(milestoneId: string) {
     setDeletedIds((prev) => new Set(prev).add(milestoneId));
     try {
       const fd = new FormData();
@@ -188,15 +187,15 @@ export function ProjectCard({
               return (
                 <li
                   key={ms.id}
-                  className="orbit-row py-2.5 flex items-center justify-between gap-2"
+                  className="py-2.5 flex flex-nowrap items-center justify-between gap-3 text-sm"
                 >
                   <p
-                    className={`orbit-row-main transition-all ${
+                    className={`min-w-0 flex-1 break-words transition-all leading-snug ${
                       status === "COMPLETED"
-                        ? "text-[var(--text-3)] line-through"
+                        ? "text-base-content/40 line-through"
                         : status === "IN_PROGRESS"
-                        ? "font-semibold text-primary"
-                        : ""
+                        ? "font-medium text-base-content"
+                        : "text-base-content/85"
                     }`}
                   >
                     {ms.title}
@@ -207,33 +206,35 @@ export function ProjectCard({
                       type="button"
                       onClick={() => void handleCycle(ms.id)}
                       disabled={isPending}
-                      aria-label={`${MILESTONE_LABEL[status]} for ${ms.title}`}
-                      className={`btn btn-ghost btn-sm select-none active:scale-90 active:bg-primary/10 transition-all gap-1.5 ${
+                      aria-label={`Toggle milestone ${ms.title}`}
+                      className={`btn btn-ghost btn-circle btn-sm select-none active:scale-90 transition-all ${
                         status === "COMPLETED"
-                          ? "text-success font-semibold"
+                          ? "text-success hover:bg-success/10"
                           : status === "IN_PROGRESS"
-                          ? "text-primary font-semibold"
-                          : "text-base-content/70"
+                          ? "text-primary hover:bg-primary/10"
+                          : "text-base-content/40 hover:text-base-content/70"
                       }`}
                     >
                       {isPending ? (
                         <Loader2 className="h-4 w-4 animate-spin text-primary" />
                       ) : status === "COMPLETED" ? (
-                        <CheckCircle2 className="h-4 w-4 text-success" aria-hidden="true" />
+                        <CheckCircle2
+                          className="h-4 w-4 text-success fill-success/15"
+                          aria-hidden="true"
+                        />
                       ) : status === "IN_PROGRESS" ? (
                         <CircleDot className="h-4 w-4 text-primary" aria-hidden="true" />
                       ) : (
-                        <Circle className="h-4 w-4" aria-hidden="true" />
+                        <Circle className="h-4 w-4 text-base-content/40" aria-hidden="true" />
                       )}
-                      <span>{MILESTONE_LABEL[status]}</span>
                     </button>
 
                     <button
                       type="button"
-                      onClick={() => void handleDelete(ms.id, ms.title)}
+                      onClick={() => void handleDelete(ms.id)}
                       aria-label={`Delete milestone ${ms.title}`}
                       title="Delete milestone"
-                      className="btn btn-ghost btn-xs text-base-content/30 hover:text-error hover:bg-error/10 px-1.5"
+                      className="btn btn-ghost btn-circle btn-xs text-base-content/30 hover:text-error hover:bg-error/10"
                     >
                       <Trash2 className="h-3.5 w-3.5" />
                     </button>

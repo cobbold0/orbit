@@ -6,6 +6,7 @@ import { Check } from "lucide-react";
 import { completeTaskAction } from "@/app/actions/orbit-actions";
 import { AreaLabel, Card } from "@/components/ui/page";
 import { RescheduleTaskModal } from "@/components/modals/reschedule-task-modal";
+import { EditTaskModal } from "@/components/modals/edit-task-modal";
 import { ActionSubmitButton } from "@/components/ui/action-button";
 import { useOrbitToast } from "@/components/ui/orbit-toast";
 import { formatDuration } from "@/lib/time/format";
@@ -19,7 +20,11 @@ export interface AreaTaskRowItem {
   waitingOnPerson: string | null;
   scheduledLabel?: string | null;
   projectTitle?: string | null;
+  lifeAreaId?: string;
+  priority?: string;
+  notes?: string | null;
   lifeArea?: {
+    id?: string;
     name: string;
     slug: string;
     colorToken: string;
@@ -30,10 +35,12 @@ type TabFilter = "ALL" | "SCHEDULED" | "FLEXIBLE" | "WAITING";
 
 export function TasksCard({
   tasks,
+  lifeAreas,
   showAreaLabel = true,
   headerAction,
 }: {
   tasks: AreaTaskRowItem[];
+  lifeAreas?: { id: string; name: string }[];
   showAreaLabel?: boolean;
   headerAction?: React.ReactNode;
 }) {
@@ -120,6 +127,17 @@ export function TasksCard({
               </div>
 
               <div className="orbit-row-actions">
+                <EditTaskModal
+                  task={{
+                    id: task.id,
+                    title: task.title,
+                    lifeAreaId: task.lifeAreaId ?? task.lifeArea?.id,
+                    estimatedMinutes: task.estimatedMinutes,
+                    priority: task.priority,
+                    notes: task.notes,
+                  }}
+                  lifeAreas={lifeAreas}
+                />
                 <RescheduleTaskModal
                   taskId={task.id}
                   taskTitle={task.title}

@@ -400,3 +400,85 @@ export async function rescheduleOrChangeCommitment(
   void flushPendingOutboxEvents({ userId, limit: 5 });
   return updated;
 }
+
+export async function updateTask(
+  userId: string,
+  taskId: string,
+  input: {
+    title?: string;
+    lifeAreaId?: string;
+    projectId?: string | null;
+    milestoneId?: string | null;
+    estimatedMinutes?: number | null;
+    dueDate?: Date | null;
+    priority?: TaskPriority;
+    notes?: string | null;
+    commitmentType?: CommitmentType;
+    status?: TaskStatus;
+  }
+) {
+  const task = await prisma.task.findFirst({
+    where: { id: taskId, userId },
+  });
+  if (!task) throw new Error("Task not found");
+
+  let validAreaId: string | undefined = undefined;
+  if (input.lifeAreaId) {
+    const area = await prisma.lifeArea.findFirst({
+      where: { id: input.lifeAreaId, userId },
+      select: { id: true },
+    });
+    if (area) validAreaId = area.id;
+  }
+
+  let validProjectId: string | null | undefined = undefined;
+  if (input.projectId !== undefined) {
+    if (input.projectId) {
+      const proj = await prisma.project.findFirst({
+        where: { id: input.projectId, userId },
+        select: { id: true },
+      });
+      validProjectId = proj ? proj.id : null;
+    } else {
+      validProjectId = null;
+    }
+  }
+
+  return prisma.task.update({
+    where: { id: taskId },
+    data: {
+      ...(input.title ? { title: input.title.trim() } : {}),
+      ...(validAreaId ? { lifeAreaId: validAreaId } : {}),
+      ...(validProjectId !== undefined ? { projectId: validProjectId } : {}),
+      ...(input.milestoneId !== undefined
+        ? { milestoneId: input.milestoneId }
+        : {}),
+      ...(input.estimatedMinutes !== undefined
+        ? { estimatedMinutes: input.estimatedMinutes }
+        : {}),
+      ...(input.dueDate !== undefined ? { dueDate: input.dueDate } : {}),
+      ...(input.priority ? { priority: input.priority } : {}),
+      ...(input.notes !== undefined
+        ? { contextNotes: input.notes?.trim() || null }
+        : {}),
+      ...(input.commitmentType ? { commitmentType: input.commitmentType } : {}),
+      ...(input.status ? { status: input.status } : {}),
+    },
+  });
+}
+
+export async function deleteTask(userId: string, taskId: string) {
+  const task = await prisma.task.findFirst({
+    where: { id: taskId, userId },
+  });
+  if (!task) throw new Error("Task not found");
+
+  // Also remove any pending workflow jobs and activity records linked to this task
+  await prisma.backgroundJob.deleteMany({
+    where: { taskId },
+  });
+
+  return prisma.task.delete({
+    where: { id: taskId },
+  });
+}
