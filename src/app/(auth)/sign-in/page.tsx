@@ -3,7 +3,7 @@
 import { Suspense, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { AlertCircle, ArrowRight, Loader2, Lock, Mail } from "lucide-react";
+import { AlertCircle, Loader2, Lock, Mail } from "lucide-react";
 import { signIn } from "@/lib/auth/auth-client";
 
 function SignInForm() {
@@ -15,7 +15,6 @@ function SignInForm() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
-  const [isDemoLoading, setIsDemoLoading] = useState(false);
 
   async function handleCredentialsSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -39,30 +38,6 @@ function SignInForm() {
       setError("Unable to sign in. Please try again.");
     } finally {
       setIsLoading(false);
-    }
-  }
-
-  async function handleDemoSignIn() {
-    setError(null);
-    setIsDemoLoading(true);
-
-    try {
-      const result = await signIn.email({
-        email: "alex@orbit.local",
-        password: "password123",
-      });
-
-      if (result.error) {
-        setError(result.error.message || "Could not sign in with demo account.");
-        return;
-      }
-
-      router.push(callbackUrl);
-      router.refresh();
-    } catch {
-      setError("Unable to sign in with demo account.");
-    } finally {
-      setIsDemoLoading(false);
     }
   }
 
@@ -98,9 +73,9 @@ function SignInForm() {
               autoComplete="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              placeholder="alex@orbit.local"
+              placeholder="you@example.com"
               className="input input-bordered w-full pl-9 text-sm"
-              disabled={isLoading || isDemoLoading}
+              disabled={isLoading}
             />
           </div>
         </fieldset>
@@ -122,14 +97,14 @@ function SignInForm() {
               onChange={(e) => setPassword(e.target.value)}
               placeholder="••••••••"
               className="input input-bordered w-full pl-9 text-sm"
-              disabled={isLoading || isDemoLoading}
+              disabled={isLoading}
             />
           </div>
         </fieldset>
 
         <button
           type="submit"
-          disabled={isLoading || isDemoLoading}
+          disabled={isLoading}
           className="btn btn-primary w-full mt-2"
         >
           {isLoading ? (
@@ -142,27 +117,6 @@ function SignInForm() {
           )}
         </button>
       </form>
-
-      <div className="divider text-xs text-base-content/40 my-5">or</div>
-
-      <button
-        type="button"
-        onClick={handleDemoSignIn}
-        disabled={isLoading || isDemoLoading}
-        className="btn btn-outline btn-block text-xs font-medium gap-2"
-      >
-        {isDemoLoading ? (
-          <>
-            <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
-            <span>Signing in as demo user...</span>
-          </>
-        ) : (
-          <>
-            <span>Sign in as Alex Vance (Demo)</span>
-            <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />
-          </>
-        )}
-      </button>
 
       <p className="mt-6 text-center text-xs text-base-content/60">
         Don&apos;t have an account?{" "}
