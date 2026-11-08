@@ -30,7 +30,13 @@ import {
   quickCaptureAction,
 } from "@/app/actions/orbit-actions";
 import { MemoryCaptureForm } from "@/components/inbox/memory-capture-studio";
-import { OrbitModal, SubmitButton } from "@/components/ui/orbit-modal";
+import { SubmitButton } from "@/components/ui/orbit-modal";
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
 import { useOrbitToast } from "@/components/ui/orbit-toast";
 import { ExpandableFab } from "./expandable-fab";
 import { QuickVoiceDialog } from "./quick-voice-dialog";
@@ -127,7 +133,6 @@ export function OrbitShell({
 }: OrbitShellProps) {
   const pathname = usePathname();
   const idBase = useId();
-  const dialogRef = useRef<HTMLDialogElement | null>(null);
   const taskInputRef = useRef<HTMLInputElement | null>(null);
   const noteTextareaRef = useRef<HTMLTextAreaElement | null>(null);
   const logTitleRef = useRef<HTMLInputElement | null>(null);
@@ -143,21 +148,19 @@ export function OrbitShell({
     }
   }
 
-  const [tab, setTab] = useState<CaptureTabMode>("task");
+  const [activeSheet, setActiveSheet] = useState<CaptureTabMode | null>(null);
   const [showMoreTaskOptions, setShowMoreTaskOptions] = useState(false);
   const [commitment, setCommitment] = useState<CommitmentChoice>("FLEXIBLE");
   const [areaId, setAreaId] = useState<string>("");
   const [isVoiceOpen, setIsVoiceOpen] = useState(false);
+  const [logDuration, setLogDuration] = useState("45");
 
   const openCapture = useCallback(
     (options?: OpenCaptureOptions) => {
-      const dialog = dialogRef.current;
-      if (!dialog) return;
-
       const requested = options?.mode ?? "task";
-      const nextTab: CaptureTabMode =
+      const nextMode: CaptureTabMode =
         requested === "note" ? "note" : requested === "log" ? "log" : "task";
-      setTab(nextTab);
+      setActiveSheet(nextMode);
       setShowMoreTaskOptions(requested === "detailed");
 
       if (options?.defaultAreaId) {
@@ -166,24 +169,21 @@ export function OrbitShell({
         setAreaId("");
       }
 
-      if (!dialog.open) {
-        dialog.showModal();
-      }
       setTimeout(() => {
-        if (nextTab === "task") {
+        if (nextMode === "task") {
           taskInputRef.current?.focus();
-        } else if (nextTab === "note") {
+        } else if (nextMode === "note") {
           noteTextareaRef.current?.focus();
         } else {
           logTitleRef.current?.focus();
         }
-      }, 20);
+      }, 60);
     },
     []
   );
 
   function closeCapture() {
-    dialogRef.current?.close();
+    setActiveSheet(null);
   }
 
   // Cmd/Ctrl + K opens Capture
@@ -385,446 +385,453 @@ export function OrbitShell({
           })}
         </nav>
 
-        {/* Unified Capture Modal: Task (to do) | Note (brain dump / voice) | Log work (done) */}
-        <OrbitModal
-          dialogRef={dialogRef}
-          title="Capture"
-          maxWidthClass="sm:max-w-lg"
+        {/* Clean dedicated capture sheet powered by Shadcn Sheet */}
+        <Sheet
+          open={activeSheet !== null}
+          onOpenChange={(open) => {
+            if (!open) closeCapture();
+          }}
         >
-          <div
-            role="tablist"
-            aria-label="What are you capturing?"
-            className="tabs tabs-box tabs-sm mb-3 w-full"
-          >
-            {(
-              [
-                ["task", "Task"],
-                ["note", "Note"],
-                ["log", "Log work"],
-              ] as const
-            ).map(([value, label]) => (
-              <button
-                key={value}
-                type="button"
-                role="tab"
-                aria-selected={tab === value}
-                onClick={() => setTab(value)}
-                className={`tab flex-1 font-medium ${
-                  tab === value ? "tab-active" : ""
-                }`}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
-
-          {tab === "task" && (
-            <form
-              ref={taskFormRef}
-              action={async (formData) => {
-                if (showMoreTaskOptions) {
-                  const raw = String(formData.get("rawInput") ?? "").trim();
-                  formData.set("title", raw);
-                  if (!formData.get("lifeAreaId") && effectiveStructuredAreaId) {
-                    formData.set("lifeAreaId", effectiveStructuredAreaId);
-                  }
-                  await createStructuredTaskAction(formData);
-                } else {
-                  await quickCaptureAction(formData);
-                }
-                taskFormRef.current?.reset();
-                setShowMoreTaskOptions(false);
-                closeCapture();
-                notify("Task added");
-              }}
-              className="space-y-3"
-            >
-              <p className="meta">
-                Something you need to do. Type naturally or add scheduling
-                details below.
-              </p>
-
-              <fieldset className="fieldset">
-                <label
-                  htmlFor={`${idBase}-task-input`}
-                  className="fieldset-legend"
-                >
-                  Task
-                </label>
-                <input
-                  ref={taskInputRef}
-                  id={`${idBase}-task-input`}
-                  name="rawInput"
-                  type="text"
-                  required
-                  autoComplete="off"
-                  placeholder="Call the Odoo developer tomorrow afternoon"
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" && e.nativeEvent.isComposing) {
-                      e.preventDefault();
+          <SheetContent side="bottom" className="max-w-xl mx-auto sm:rounded-t-3xl">
+            {activeSheet === "task" && (
+              <>
+                <SheetHeader>
+                  <SheetTitle>New task</SheetTitle>
+                </SheetHeader>
+                <form
+                  ref={taskFormRef}
+                  action={async (formData) => {
+                    if (showMoreTaskOptions) {
+                      const raw = String(formData.get("rawInput") ?? "").trim();
+                      formData.set("title", raw);
+                      if (!formData.get("lifeAreaId") && effectiveStructuredAreaId) {
+                        formData.set("lifeAreaId", effectiveStructuredAreaId);
+                      }
+                      await createStructuredTaskAction(formData);
+                    } else {
+                      await quickCaptureAction(formData);
                     }
+                    taskFormRef.current?.reset();
+                    setShowMoreTaskOptions(false);
+                    closeCapture();
+                    notify("Task added");
                   }}
-                  className="input w-full"
-                />
-              </fieldset>
-
-              <fieldset className="fieldset">
-                <label
-                  htmlFor={`${idBase}-task-area`}
-                  className="fieldset-legend"
+                  className="space-y-3.5"
                 >
-                  Area
-                </label>
-                <select
-                  id={`${idBase}-task-area`}
-                  name="lifeAreaId"
-                  value={areaId}
-                  onChange={(e) => setAreaId(e.target.value)}
-                  className="select w-full"
-                >
-                  {!showMoreTaskOptions && (
-                    <option value="">Detect automatically</option>
-                  )}
-                  {lifeAreas.map((a) => (
-                    <option key={a.id} value={a.id}>
-                      {a.name}
-                    </option>
-                  ))}
-                </select>
-              </fieldset>
-
-              <details
-                open={showMoreTaskOptions}
-                onToggle={(e) =>
-                  setShowMoreTaskOptions(
-                    (e.currentTarget as HTMLDetailsElement).open
-                  )
-                }
-                className="rounded-xl border border-base-300 bg-base-200/50 px-3.5 py-2.5"
-              >
-                <summary className="cursor-pointer text-[0.9375rem] font-medium text-[var(--text-2)]">
-                  Schedule, project, or priority
-                </summary>
-
-                <div className="mt-3 space-y-3">
                   <fieldset className="fieldset">
                     <label
-                      htmlFor={`${idBase}-d-project`}
-                      className="fieldset-legend"
+                      htmlFor={`${idBase}-task-input`}
+                      className="fieldset-legend font-medium"
                     >
-                      Project
+                      Task
+                    </label>
+                    <input
+                      ref={taskInputRef}
+                      id={`${idBase}-task-input`}
+                      name="rawInput"
+                      type="text"
+                      required
+                      autoComplete="off"
+                      placeholder="What needs to be done?"
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" && e.nativeEvent.isComposing) {
+                          e.preventDefault();
+                        }
+                      }}
+                      className="input w-full"
+                    />
+                  </fieldset>
+
+                  <fieldset className="fieldset">
+                    <label
+                      htmlFor={`${idBase}-task-area`}
+                      className="fieldset-legend font-medium"
+                    >
+                      Area
                     </label>
                     <select
-                      id={`${idBase}-d-project`}
-                      name="projectId"
-                      defaultValue=""
+                      id={`${idBase}-task-area`}
+                      name="lifeAreaId"
+                      value={areaId}
+                      onChange={(e) => setAreaId(e.target.value)}
                       className="select w-full"
                     >
-                      <option value="">None</option>
-                      {areaProjects.map((p) => (
-                        <option key={p.id} value={p.id}>
-                          {p.title}
+                      {!showMoreTaskOptions && (
+                        <option value="">Detect automatically</option>
+                      )}
+                      {lifeAreas.map((a) => (
+                        <option key={a.id} value={a.id}>
+                          {a.name}
                         </option>
                       ))}
                     </select>
                   </fieldset>
 
-                  <fieldset className="fieldset">
-                    <legend className="fieldset-legend">Type</legend>
-                    <div className="tabs tabs-box w-full">
-                      {(
-                        [
-                          ["FLEXIBLE", "Flexible"],
-                          ["SCHEDULED", "Scheduled"],
-                          ["WAITING", "Waiting"],
-                        ] as const
-                      ).map(([value, label]) => (
-                        <label key={value} className="tab flex-1 font-medium">
-                          <input
-                            type="radio"
-                            name="commitmentType"
-                            value={value}
-                            checked={commitment === value}
-                            onChange={() => setCommitment(value)}
-                          />
-                          {label}
+                  <details
+                    open={showMoreTaskOptions}
+                    onToggle={(e) =>
+                      setShowMoreTaskOptions(
+                        (e.currentTarget as HTMLDetailsElement).open
+                      )
+                    }
+                    className="rounded-xl border border-base-300 bg-base-200/50 px-3.5 py-2.5"
+                  >
+                    <summary className="cursor-pointer text-sm font-medium text-base-content/80 hover:text-base-content">
+                      Schedule, project, or priority
+                    </summary>
+
+                    <div className="mt-3 space-y-3">
+                      <fieldset className="fieldset">
+                        <label
+                          htmlFor={`${idBase}-d-project`}
+                          className="fieldset-legend font-medium"
+                        >
+                          Project
                         </label>
-                      ))}
+                        <select
+                          id={`${idBase}-d-project`}
+                          name="projectId"
+                          defaultValue=""
+                          className="select w-full"
+                        >
+                          <option value="">None</option>
+                          {areaProjects.map((p) => (
+                            <option key={p.id} value={p.id}>
+                              {p.title}
+                            </option>
+                          ))}
+                        </select>
+                      </fieldset>
+
+                      <fieldset className="fieldset">
+                        <legend className="fieldset-legend font-medium">Type</legend>
+                        <div className="tabs tabs-box w-full">
+                          {(
+                            [
+                              ["FLEXIBLE", "Flexible"],
+                              ["SCHEDULED", "Scheduled"],
+                              ["WAITING", "Waiting"],
+                            ] as const
+                          ).map(([value, label]) => (
+                            <label key={value} className="tab flex-1 font-medium">
+                              <input
+                                type="radio"
+                                name="commitmentType"
+                                value={value}
+                                checked={commitment === value}
+                                onChange={() => setCommitment(value)}
+                              />
+                              {label}
+                            </label>
+                          ))}
+                        </div>
+                      </fieldset>
+
+                      {commitment === "SCHEDULED" && (
+                        <div className="grid gap-3 sm:grid-cols-2">
+                          <fieldset className="fieldset">
+                            <label
+                              htmlFor={`${idBase}-d-date`}
+                              className="fieldset-legend font-medium"
+                            >
+                              Date
+                            </label>
+                            <input
+                              id={`${idBase}-d-date`}
+                              name="scheduledDate"
+                              type="date"
+                              required={showMoreTaskOptions}
+                              className="input w-full"
+                            />
+                          </fieldset>
+                          <fieldset className="fieldset">
+                            <label
+                              htmlFor={`${idBase}-d-time`}
+                              className="fieldset-legend font-medium"
+                            >
+                              Start time
+                            </label>
+                            <input
+                              id={`${idBase}-d-time`}
+                              name="scheduledTime"
+                              type="time"
+                              required={showMoreTaskOptions}
+                              defaultValue="14:00"
+                              className="input w-full"
+                            />
+                          </fieldset>
+                        </div>
+                      )}
+
+                      {commitment === "FLEXIBLE" && (
+                        <fieldset className="fieldset">
+                          <label
+                            htmlFor={`${idBase}-d-window`}
+                            className="fieldset-legend font-medium"
+                          >
+                            When
+                          </label>
+                          <select
+                            id={`${idBase}-d-window`}
+                            name="flexibilityWindow"
+                            defaultValue="THIS_WEEK"
+                            className="select w-full"
+                          >
+                            <option value="THIS_MORNING">This morning</option>
+                            <option value="THIS_AFTERNOON">This afternoon</option>
+                            <option value="THIS_EVENING">This evening</option>
+                            <option value="THIS_WEEK">This week</option>
+                            <option value="WEEKEND">Weekend</option>
+                          </select>
+                        </fieldset>
+                      )}
+
+                      {commitment === "WAITING" && (
+                        <div className="grid gap-3 sm:grid-cols-2">
+                          <fieldset className="fieldset">
+                            <label
+                              htmlFor={`${idBase}-d-who`}
+                              className="fieldset-legend font-medium"
+                            >
+                              Waiting on
+                            </label>
+                            <input
+                              id={`${idBase}-d-who`}
+                              name="waitingOnPerson"
+                              type="text"
+                              className="input w-full"
+                            />
+                          </fieldset>
+                          <fieldset className="fieldset">
+                            <label
+                              htmlFor={`${idBase}-d-what`}
+                              className="fieldset-legend font-medium"
+                            >
+                              For
+                            </label>
+                            <input
+                              id={`${idBase}-d-what`}
+                              name="waitingOnCondition"
+                              type="text"
+                              className="input w-full"
+                            />
+                          </fieldset>
+                        </div>
+                      )}
+
+                      <div className="grid gap-3 sm:grid-cols-3">
+                        <fieldset className="fieldset">
+                          <label
+                            htmlFor={`${idBase}-d-duration`}
+                            className="fieldset-legend font-medium"
+                          >
+                            Minutes
+                          </label>
+                          <input
+                            id={`${idBase}-d-duration`}
+                            name="estimatedMinutes"
+                            type="text"
+                            inputMode="numeric"
+                            defaultValue="45"
+                            className="input w-full"
+                          />
+                        </fieldset>
+                        <fieldset className="fieldset">
+                          <label
+                            htmlFor={`${idBase}-d-due`}
+                            className="fieldset-legend font-medium"
+                          >
+                            Due date
+                          </label>
+                          <input
+                            id={`${idBase}-d-due`}
+                            name="dueDate"
+                            type="date"
+                            className="input w-full"
+                          />
+                        </fieldset>
+                        <fieldset className="fieldset">
+                          <label
+                            htmlFor={`${idBase}-d-priority`}
+                            className="fieldset-legend font-medium"
+                          >
+                            Priority
+                          </label>
+                          <select
+                            id={`${idBase}-d-priority`}
+                            name="priority"
+                            defaultValue="NORMAL"
+                            className="select w-full"
+                          >
+                            <option value="LOW">Low</option>
+                            <option value="NORMAL">Normal</option>
+                            <option value="HIGH">High</option>
+                            <option value="CRITICAL">Critical</option>
+                          </select>
+                        </fieldset>
+                      </div>
                     </div>
+                  </details>
+
+                  <div className="flex justify-end gap-2 pt-2 border-t border-base-300/60 mt-4">
+                    <button
+                      type="button"
+                      onClick={closeCapture}
+                      className="btn btn-ghost"
+                    >
+                      Cancel
+                    </button>
+                    <SubmitButton pendingLabel="Adding">Add task</SubmitButton>
+                  </div>
+                </form>
+              </>
+            )}
+
+            {activeSheet === "note" && (
+              <>
+                <SheetHeader>
+                  <SheetTitle>New note</SheetTitle>
+                </SheetHeader>
+                <MemoryCaptureForm
+                  textareaRef={noteTextareaRef}
+                  onSuccess={closeCapture}
+                  onCancel={closeCapture}
+                />
+              </>
+            )}
+
+            {activeSheet === "log" && (
+              <>
+                <SheetHeader>
+                  <SheetTitle>Log work</SheetTitle>
+                </SheetHeader>
+                <form
+                  ref={logFormRef}
+                  action={async (formData) => {
+                    await logActivityCheckInAction(formData);
+                    logFormRef.current?.reset();
+                    closeCapture();
+                    notify("Work logged");
+                  }}
+                  className="space-y-3.5"
+                >
+                  <fieldset className="fieldset">
+                    <label
+                      htmlFor={`${idBase}-log-title`}
+                      className="fieldset-legend font-medium"
+                    >
+                      What did you work on?
+                    </label>
+                    <input
+                      ref={logTitleRef}
+                      id={`${idBase}-log-title`}
+                      name="title"
+                      type="text"
+                      required
+                      autoComplete="off"
+                      placeholder="e.g. Client consultation, sprint review"
+                      className="input w-full"
+                    />
                   </fieldset>
 
-                  {commitment === "SCHEDULED" && (
-                    <div className="grid gap-3 sm:grid-cols-2">
-                      <fieldset className="fieldset">
-                        <label
-                          htmlFor={`${idBase}-d-date`}
-                          className="fieldset-legend"
-                        >
-                          Date
-                        </label>
-                        <input
-                          id={`${idBase}-d-date`}
-                          name="scheduledDate"
-                          type="date"
-                          required={showMoreTaskOptions}
-                          className="input w-full"
-                        />
-                      </fieldset>
-                      <fieldset className="fieldset">
-                        <label
-                          htmlFor={`${idBase}-d-time`}
-                          className="fieldset-legend"
-                        >
-                          Start time
-                        </label>
-                        <input
-                          id={`${idBase}-d-time`}
-                          name="scheduledTime"
-                          type="time"
-                          required={showMoreTaskOptions}
-                          defaultValue="14:00"
-                          className="input w-full"
-                        />
-                      </fieldset>
-                    </div>
-                  )}
-
-                  {commitment === "FLEXIBLE" && (
+                  <div className="grid gap-3 sm:grid-cols-2">
                     <fieldset className="fieldset">
                       <label
-                        htmlFor={`${idBase}-d-window`}
-                        className="fieldset-legend"
+                        htmlFor={`${idBase}-log-area`}
+                        className="fieldset-legend font-medium"
                       >
-                        When
+                        Area
                       </label>
                       <select
-                        id={`${idBase}-d-window`}
-                        name="flexibilityWindow"
-                        defaultValue="THIS_WEEK"
+                        id={`${idBase}-log-area`}
+                        name="lifeAreaId"
+                        defaultValue={areaId || lifeAreas[0]?.id || ""}
                         className="select w-full"
                       >
-                        <option value="THIS_MORNING">This morning</option>
-                        <option value="THIS_AFTERNOON">This afternoon</option>
-                        <option value="THIS_EVENING">This evening</option>
-                        <option value="THIS_WEEK">This week</option>
-                        <option value="WEEKEND">Weekend</option>
+                        {lifeAreas.map((a) => (
+                          <option key={a.id} value={a.id}>
+                            {a.name}
+                          </option>
+                        ))}
                       </select>
                     </fieldset>
-                  )}
 
-                  {commitment === "WAITING" && (
-                    <div className="grid gap-3 sm:grid-cols-2">
-                      <fieldset className="fieldset">
-                        <label
-                          htmlFor={`${idBase}-d-who`}
-                          className="fieldset-legend"
-                        >
-                          Waiting on
-                        </label>
-                        <input
-                          id={`${idBase}-d-who`}
-                          name="waitingOnPerson"
-                          type="text"
-                          className="input w-full"
-                        />
-                      </fieldset>
-                      <fieldset className="fieldset">
-                        <label
-                          htmlFor={`${idBase}-d-what`}
-                          className="fieldset-legend"
-                        >
-                          For
-                        </label>
-                        <input
-                          id={`${idBase}-d-what`}
-                          name="waitingOnCondition"
-                          type="text"
-                          className="input w-full"
-                        />
-                      </fieldset>
-                    </div>
-                  )}
-
-                  <div className="grid gap-3 sm:grid-cols-3">
                     <fieldset className="fieldset">
                       <label
-                        htmlFor={`${idBase}-d-duration`}
-                        className="fieldset-legend"
+                        htmlFor={`${idBase}-log-min`}
+                        className="fieldset-legend font-medium"
                       >
-                        Minutes
+                        Duration (minutes)
                       </label>
                       <input
-                        id={`${idBase}-d-duration`}
-                        name="estimatedMinutes"
+                        id={`${idBase}-log-min`}
+                        name="durationMinutes"
                         type="text"
                         inputMode="numeric"
-                        defaultValue="45"
+                        value={logDuration}
+                        onChange={(e) => setLogDuration(e.target.value)}
                         className="input w-full"
                       />
-                    </fieldset>
-                    <fieldset className="fieldset">
-                      <label
-                        htmlFor={`${idBase}-d-due`}
-                        className="fieldset-legend"
-                      >
-                        Due date
-                      </label>
-                      <input
-                        id={`${idBase}-d-due`}
-                        name="dueDate"
-                        type="date"
-                        className="input w-full"
-                      />
-                    </fieldset>
-                    <fieldset className="fieldset">
-                      <label
-                        htmlFor={`${idBase}-d-priority`}
-                        className="fieldset-legend"
-                      >
-                        Priority
-                      </label>
-                      <select
-                        id={`${idBase}-d-priority`}
-                        name="priority"
-                        defaultValue="NORMAL"
-                        className="select w-full"
-                      >
-                        <option value="LOW">Low</option>
-                        <option value="NORMAL">Normal</option>
-                        <option value="HIGH">High</option>
-                        <option value="CRITICAL">Critical</option>
-                      </select>
+                      <div className="mt-2 flex flex-wrap gap-1.5">
+                        {(
+                          [
+                            ["15m", "15"],
+                            ["30m", "30"],
+                            ["45m", "45"],
+                            ["1h", "60"],
+                            ["1.5h", "90"],
+                            ["2h", "120"],
+                          ] as const
+                        ).map(([label, val]) => (
+                          <button
+                            key={val}
+                            type="button"
+                            onClick={() => setLogDuration(val)}
+                            className={`btn btn-xs rounded-full ${
+                              logDuration === val
+                                ? "btn-neutral"
+                                : "btn-ghost border border-base-300"
+                            }`}
+                          >
+                            {label}
+                          </button>
+                        ))}
+                      </div>
                     </fieldset>
                   </div>
-                </div>
-              </details>
 
-              <div className="modal-action">
-                <button
-                  type="button"
-                  onClick={closeCapture}
-                  className="btn btn-ghost"
-                >
-                  Cancel
-                </button>
-                <SubmitButton pendingLabel="Adding">Add task</SubmitButton>
-              </div>
-            </form>
-          )}
+                  <fieldset className="fieldset">
+                    <label
+                      htmlFor={`${idBase}-log-loc`}
+                      className="fieldset-legend font-medium"
+                    >
+                      Location (optional)
+                    </label>
+                    <input
+                      id={`${idBase}-log-loc`}
+                      name="physicalLocation"
+                      type="text"
+                      autoComplete="off"
+                      placeholder="e.g. Office, Home"
+                      className="input w-full"
+                    />
+                  </fieldset>
 
-          {tab === "note" && (
-            <MemoryCaptureForm
-              textareaRef={noteTextareaRef}
-              onSuccess={closeCapture}
-              onCancel={closeCapture}
-            />
-          )}
-
-          {tab === "log" && (
-            <form
-              ref={logFormRef}
-              action={async (formData) => {
-                await logActivityCheckInAction(formData);
-                logFormRef.current?.reset();
-                closeCapture();
-                notify("Work logged");
-              }}
-              className="space-y-3"
-            >
-              <p className="meta">
-                Record something you already spent time on. Saved directly to
-                your Activity work log.
-              </p>
-
-              <fieldset className="fieldset">
-                <label
-                  htmlFor={`${idBase}-log-title`}
-                  className="fieldset-legend"
-                >
-                  What did you work on?
-                </label>
-                <input
-                  ref={logTitleRef}
-                  id={`${idBase}-log-title`}
-                  name="title"
-                  type="text"
-                  required
-                  autoComplete="off"
-                  placeholder="Vocal warmups, Odoo sprint review"
-                  className="input w-full"
-                />
-              </fieldset>
-
-              <div className="grid gap-3 sm:grid-cols-2">
-                <fieldset className="fieldset">
-                  <label
-                    htmlFor={`${idBase}-log-area`}
-                    className="fieldset-legend"
-                  >
-                    Area
-                  </label>
-                  <select
-                    id={`${idBase}-log-area`}
-                    name="lifeAreaId"
-                    defaultValue={areaId || lifeAreas[0]?.id || ""}
-                    className="select w-full"
-                  >
-                    {lifeAreas.map((a) => (
-                      <option key={a.id} value={a.id}>
-                        {a.name}
-                      </option>
-                    ))}
-                  </select>
-                </fieldset>
-
-                <fieldset className="fieldset">
-                  <label
-                    htmlFor={`${idBase}-log-min`}
-                    className="fieldset-legend"
-                  >
-                    Duration in minutes
-                  </label>
-                  <input
-                    id={`${idBase}-log-min`}
-                    name="durationMinutes"
-                    type="text"
-                    inputMode="numeric"
-                    defaultValue="45"
-                    className="input w-full"
-                  />
-                </fieldset>
-              </div>
-
-              <fieldset className="fieldset">
-                <label
-                  htmlFor={`${idBase}-log-loc`}
-                  className="fieldset-legend"
-                >
-                  Location (optional)
-                </label>
-                <input
-                  id={`${idBase}-log-loc`}
-                  name="physicalLocation"
-                  type="text"
-                  autoComplete="off"
-                  placeholder="Basilissa Office, Home"
-                  className="input w-full"
-                />
-              </fieldset>
-
-              <div className="modal-action">
-                <button
-                  type="button"
-                  onClick={closeCapture}
-                  className="btn btn-ghost"
-                >
-                  Cancel
-                </button>
-                <SubmitButton pendingLabel="Saving">Save to log</SubmitButton>
-              </div>
-            </form>
-          )}
-        </OrbitModal>
+                  <div className="flex justify-end gap-2 pt-2 border-t border-base-300/60 mt-4">
+                    <button
+                      type="button"
+                      onClick={closeCapture}
+                      className="btn btn-ghost"
+                    >
+                      Cancel
+                    </button>
+                    <SubmitButton pendingLabel="Saving">Save to log</SubmitButton>
+                  </div>
+                </form>
+              </>
+            )}
+          </SheetContent>
+        </Sheet>
 
         {/* Expandable Speed-Dial FAB for Quick Actions (Voice, Task, Note, Work Log) */}
         <ExpandableFab
