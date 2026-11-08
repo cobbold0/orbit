@@ -468,7 +468,10 @@ export class GeminiAIProvider implements AIProvider {
   private readonly fallback = new DeterministicFallbackProvider();
 
   private getClient(): GoogleGenAI | null {
-    const apiKey = (process.env.GEMINI_API_KEY ?? "").trim();
+    let apiKey = (process.env.GEMINI_API_KEY ?? "").trim();
+    if (apiKey.startsWith('"') && apiKey.endsWith('"')) {
+      apiKey = apiKey.slice(1, -1).trim();
+    }
     if (!apiKey) return null;
     return new GoogleGenAI({ apiKey });
   }

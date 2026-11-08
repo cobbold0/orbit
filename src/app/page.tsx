@@ -152,27 +152,18 @@ export default async function TodayPage() {
         >
           <div className="flex flex-col gap-4">
             <div className="flex flex-wrap items-center justify-between gap-2">
-              <span className="text-xs font-semibold tracking-wider uppercase text-base-content/50">
-                {formatLongDate(data.wallClock.localDate)}
-              </span>
-              {loc && (
-                <span className="badge badge-soft badge-neutral text-xs gap-1.5 py-1 px-2.5">
-                  <MapPin className="h-3.5 w-3.5 text-base-content/70" />
-                  <span>
-                    {loc.physicalLocation ?? loc.title} until {loc.endTimeLocal}
-                  </span>
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-semibold tracking-wider uppercase text-base-content/50">
+                  {formatLongDate(data.wallClock.localDate)}
                 </span>
-              )}
-            </div>
-
-            <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
-              <div className="min-w-0 flex-1">
-                <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-base-content">
-                  {greeting}, {firstName}.
-                </h1>
-                <p className="mt-2 text-base sm:text-lg text-base-content/85 leading-relaxed font-normal max-w-3xl">
-                  How are you doing today? {narrative}
-                </p>
+                {loc && (
+                  <span className="badge badge-soft badge-neutral text-xs gap-1.5 py-1 px-2.5">
+                    <MapPin className="h-3.5 w-3.5 text-base-content/70" />
+                    <span>
+                      {loc.physicalLocation ?? loc.title} until {loc.endTimeLocal}
+                    </span>
+                  </span>
+                )}
               </div>
 
               <DailyDigestSpeaker
@@ -196,6 +187,15 @@ export default async function TodayPage() {
                     : undefined
                 }
               />
+            </div>
+
+            <div>
+              <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-base-content">
+                {greeting}, {firstName}.
+              </h1>
+              <p className="mt-2 text-base sm:text-lg text-base-content/85 leading-relaxed font-normal max-w-3xl">
+                How are you doing today? {narrative}
+              </p>
             </div>
 
             {/* Embedded Conversational Planner Action Bar */}

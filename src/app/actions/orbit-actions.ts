@@ -12,6 +12,7 @@ import {
   TaskPriority,
 } from "@prisma/client";
 import { Temporal } from "temporal-polyfill";
+import { GoogleGenAI } from "@google/genai";
 import { getCurrentUser } from "@/lib/auth/session";
 import {
   confirmTaskCompletion,
@@ -715,6 +716,80 @@ export async function transcribeAudioBase64Action(
   }
 
   return aiGateway.transcribeAudioNote(audioBase64, mimeType);
+}
+
+function pcmToWav(
+  pcmBuffer: Buffer,
+  sampleRate = 24000,
+  numChannels = 1
+): Buffer {
+  const byteRate = sampleRate * numChannels * 2;
+  const blockAlign = numChannels * 2;
+  const wavHeader = Buffer.alloc(44);
+
+  wavHeader.write("RIFF", 0);
+  wavHeader.writeUInt32LE(36 + pcmBuffer.length, 4);
+  wavHeader.write("WAVE", 8);
+  wavHeader.write("fmt ", 12);
+  wavHeader.writeUInt32LE(16, 16);
+  wavHeader.writeUInt16LE(1, 20); // PCM
+  wavHeader.writeUInt16LE(numChannels, 22);
+  wavHeader.writeUInt32LE(sampleRate, 24);
+  wavHeader.writeUInt32LE(byteRate, 28);
+  wavHeader.writeUInt16LE(blockAlign, 32);
+  wavHeader.writeUInt16LE(16, 34); // 16-bit
+  wavHeader.write("data", 36);
+  wavHeader.writeUInt32LE(pcmBuffer.length, 40);
+
+  return Buffer.concat([wavHeader, pcmBuffer]);
+}
+
+export async function synthesizeGoogleSpeechAction(
+  text: string
+): Promise<{ audioBase64: string | null; mimeType: string | null }> {
+  await requireUserId();
+  let apiKey = (process.env.GEMINI_API_KEY ?? "").trim();
+  if (apiKey.startsWith('"') && apiKey.endsWith('"')) {
+    apiKey = apiKey.slice(1, -1).trim();
+  }
+
+  if (!apiKey) {
+    return { audioBase64: null, mimeType: null };
+  }
+
+  try {
+    const ai = new GoogleGenAI({ apiKey });
+    const response = await ai.models.generateContent({
+      model: "gemini-2.5-flash-preview-tts",
+      contents: `Please read aloud: ${text}`,
+      config: {
+        responseModalities: ["AUDIO"],
+        speechConfig: {
+          voiceConfig: {
+            prebuiltVoiceConfig: {
+              voiceName: "Aoede",
+            },
+          },
+        },
+      },
+    });
+
+    const parts = response.candidates?.[0]?.content?.parts;
+    const audioPart = parts?.find((p) => p.inlineData?.data);
+
+    if (audioPart?.inlineData?.data) {
+      const rawPcm = Buffer.from(audioPart.inlineData.data, "base64");
+      const wav = pcmToWav(rawPcm, 24000, 1);
+      return {
+        audioBase64: wav.toString("base64"),
+        mimeType: "audio/wav",
+      };
+    }
+  } catch (err) {
+    console.error("synthesizeGoogleSpeechAction error:", err);
+  }
+
+  return { audioBase64: null, mimeType: null };
 }
 
 // ============================================================================
