@@ -13,6 +13,7 @@ import { DailyDigestSpeaker } from "@/components/planning/daily-digest-speaker";
 import { AreaLabel, Card } from "@/components/ui/page";
 import { RescheduleTaskModal } from "@/components/modals/reschedule-task-modal";
 import { EditTaskModal } from "@/components/modals/edit-task-modal";
+import { DeleteTaskButton } from "@/components/modals/delete-task-button";
 import { LogActivityModal } from "@/components/modals/activity-modals";
 import { ActionSubmitButton } from "@/components/ui/action-button";
 import {
@@ -335,6 +336,7 @@ export default async function TodayPage() {
                     }}
                     lifeAreas={data.lifeAreas}
                   />
+                  <DeleteTaskButton taskId={task.id} taskTitle={task.title} />
                 </div>
               </div>
             ))}
@@ -426,6 +428,7 @@ export default async function TodayPage() {
                       }}
                       lifeAreas={data.lifeAreas}
                     />
+                    <DeleteTaskButton taskId={task.id} taskTitle={task.title} />
                     <form action={completeTaskAction}>
                       <input type="hidden" name="taskId" value={task.id} />
                       <ActionSubmitButton
@@ -489,6 +492,7 @@ export default async function TodayPage() {
                     }}
                     lifeAreas={data.lifeAreas}
                   />
+                  <DeleteTaskButton taskId={task.id} taskTitle={task.title} />
                   <RescheduleTaskModal
                     taskId={task.id}
                     taskTitle={task.title}
@@ -563,6 +567,26 @@ export default async function TodayPage() {
                       )}
                     </p>
                   </div>
+                  <div className="orbit-row-actions">
+                    <EditTaskModal
+                      task={{
+                        id: task.id,
+                        title: task.title,
+                        lifeAreaId: task.lifeAreaId,
+                        estimatedMinutes: task.estimatedMinutes,
+                      }}
+                      lifeAreas={data.lifeAreas}
+                    />
+                    <DeleteTaskButton taskId={task.id} taskTitle={task.title} />
+                    <form action={completeTaskAction}>
+                      <input type="hidden" name="taskId" value={task.id} />
+                      <ActionSubmitButton
+                        className="btn btn-ghost btn-sm btn-square"
+                        ariaLabel={`Done ${task.title}`}
+                        icon={<Check className="h-4 w-4" aria-hidden="true" />}
+                      />
+                    </form>
+                  </div>
                 </div>
               ))}
               {data.waitingTasks.map((task) => (
@@ -581,6 +605,26 @@ export default async function TodayPage() {
                       </Link>
                       <span>Waiting on {task.waitingOnPerson ?? "someone"}</span>
                     </p>
+                  </div>
+                  <div className="orbit-row-actions">
+                    <EditTaskModal
+                      task={{
+                        id: task.id,
+                        title: task.title,
+                        lifeAreaId: task.lifeAreaId,
+                        estimatedMinutes: task.estimatedMinutes,
+                      }}
+                      lifeAreas={data.lifeAreas}
+                    />
+                    <DeleteTaskButton taskId={task.id} taskTitle={task.title} />
+                    <form action={completeTaskAction}>
+                      <input type="hidden" name="taskId" value={task.id} />
+                      <ActionSubmitButton
+                        className="btn btn-ghost btn-sm btn-square"
+                        ariaLabel={`Done ${task.title}`}
+                        icon={<Check className="h-4 w-4" aria-hidden="true" />}
+                      />
+                    </form>
                   </div>
                 </div>
               ))}

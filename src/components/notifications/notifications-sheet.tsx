@@ -7,7 +7,6 @@ import {
   CheckCircle2,
   ExternalLink,
   Loader2,
-  Sparkles,
   X,
 } from "lucide-react";
 import {
@@ -19,7 +18,6 @@ import {
 import {
   dismissNotificationAction,
   getRecentCheckInsAction,
-  triggerProactiveCheckInAction,
 } from "@/app/actions/orbit-actions";
 import { useOrbitToast } from "@/components/ui/orbit-toast";
 
@@ -44,7 +42,6 @@ export function NotificationsSheet({
   const [loading, setLoading] = useState(false);
   const [notifications, setNotifications] = useState<CheckInNotificationItem[]>([]);
   const [dismissingId, setDismissingId] = useState<string | null>(null);
-  const [isSendingTest, setIsSendingTest] = useState(false);
   const { notify } = useOrbitToast();
 
   const loadNotifications = React.useCallback(async () => {
@@ -80,21 +77,6 @@ export function NotificationsSheet({
     }
   }
 
-  async function handleSendTest() {
-    setIsSendingTest(true);
-    try {
-      const res = await triggerProactiveCheckInAction("TASK_CHECKIN");
-      if (res.ok) {
-        notify("Test check-in created!");
-        await loadNotifications();
-      } else {
-        notify(res.message || "Could not generate test check-in");
-      }
-    } finally {
-      setIsSendingTest(false);
-    }
-  }
-
   return (
     <>
       {isDesktop ? (
@@ -117,7 +99,7 @@ export function NotificationsSheet({
         <button
           type="button"
           onClick={() => setIsOpen(true)}
-          aria-label="View notifications and check-ins"
+          aria-label="View notifications"
           className="relative flex h-8 w-8 items-center justify-center rounded-full hover:bg-base-200/70 text-base-content/75 transition-colors"
         >
           <Bell className="h-4 w-4" />
@@ -134,31 +116,12 @@ export function NotificationsSheet({
           side="bottom"
           className="max-w-xl mx-auto sm:rounded-t-3xl max-h-[85vh] overflow-y-auto"
         >
-          <SheetHeader className="mb-3 text-left">
-            <div className="flex items-center justify-between gap-3 pr-8">
-              <SheetTitle className="flex items-center gap-2 text-lg font-bold tracking-tight text-base-content">
-                <Bell className="h-5 w-5 text-primary" aria-hidden="true" />
-                <span>Notifications & Check-ins</span>
-              </SheetTitle>
-              <button
-                type="button"
-                onClick={() => void handleSendTest()}
-                disabled={isSendingTest}
-                className="btn btn-ghost btn-xs gap-1 text-primary text-xs"
-              >
-                {isSendingTest ? (
-                  <Loader2 className="h-3 w-3 animate-spin" />
-                ) : (
-                  <Sparkles className="h-3 w-3" />
-                )}
-                <span>Test check-in</span>
-              </button>
-            </div>
+          <SheetHeader className="mb-4 text-left">
+            <SheetTitle className="flex items-center gap-2 text-lg font-bold tracking-tight text-base-content">
+              <Bell className="h-5 w-5 text-primary" aria-hidden="true" />
+              <span>Notifications</span>
+            </SheetTitle>
           </SheetHeader>
-
-          <p className="text-xs text-base-content/60 mb-3">
-            Proactive commitment check-ins, routine syncs, and attention requests from Orbit.
-          </p>
 
           {loading ? (
             <div className="flex flex-col items-center justify-center py-10 gap-2 text-base-content/50">
@@ -172,7 +135,7 @@ export function NotificationsSheet({
                 All caught up
               </p>
               <p className="text-xs text-base-content/60 mt-1 max-w-xs">
-                No pending check-in notifications. Orbit will check in when you finish scheduled focus blocks.
+                No new notifications. Orbit will alert you when you finish focus blocks or routines.
               </p>
             </div>
           ) : (

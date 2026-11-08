@@ -473,9 +473,28 @@ export async function deleteTask(userId: string, taskId: string) {
   });
   if (!task) throw new Error("Task not found");
 
-  // Also remove any pending workflow jobs and activity records linked to this task
+  // Clean up any references in relations before deleting task
   await prisma.backgroundJob.deleteMany({
     where: { taskId },
+  });
+  await prisma.notification.deleteMany({
+    where: { taskId },
+  });
+  await prisma.taskScheduleHistory.deleteMany({
+    where: { taskId },
+  });
+  await prisma.taskDependency.deleteMany({
+    where: {
+      OR: [{ dependentTaskId: taskId }, { prerequisiteTaskId: taskId }],
+    },
+  });
+  await prisma.extractedAction.updateMany({
+    where: { materializedTaskId: taskId },
+    data: { materializedTaskId: null },
+  });
+  await prisma.activityRecord.updateMany({
+    where: { taskId },
+    data: { taskId: null },
   });
 
   return prisma.task.delete({

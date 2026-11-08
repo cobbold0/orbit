@@ -7,6 +7,7 @@ import { completeTaskAction } from "@/app/actions/orbit-actions";
 import { AreaLabel, Card } from "@/components/ui/page";
 import { RescheduleTaskModal } from "@/components/modals/reschedule-task-modal";
 import { EditTaskModal } from "@/components/modals/edit-task-modal";
+import { DeleteTaskButton } from "@/components/modals/delete-task-button";
 import { ActionSubmitButton } from "@/components/ui/action-button";
 import { useOrbitToast } from "@/components/ui/orbit-toast";
 import { formatDuration } from "@/lib/time/format";
@@ -138,6 +139,7 @@ export function TasksCard({
                   }}
                   lifeAreas={lifeAreas}
                 />
+                <DeleteTaskButton taskId={task.id} taskTitle={task.title} />
                 <RescheduleTaskModal
                   taskId={task.id}
                   taskTitle={task.title}

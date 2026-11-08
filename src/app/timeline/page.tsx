@@ -8,6 +8,8 @@ import {
 import { OrbitShell } from "@/components/shell/orbit-shell";
 import { AreaDot, AreaLabel, Card, PageHeader } from "@/components/ui/page";
 import { RescheduleTaskModal } from "@/components/modals/reschedule-task-modal";
+import { EditTaskModal } from "@/components/modals/edit-task-modal";
+import { DeleteTaskButton } from "@/components/modals/delete-task-button";
 import { ScheduleWindowModal } from "@/components/modals/schedule-window-modal";
 import { ActionSubmitButton } from "@/components/ui/action-button";
 import { formatDuration, formatLongDate } from "@/lib/time/format";
@@ -212,6 +214,19 @@ export default async function TimelinePage({ searchParams }: TimelinePageProps) 
                           <p className="meta-soft">Completed</p>
                         ) : (
                           <div className="orbit-row-actions">
+                            <EditTaskModal
+                              task={{
+                                id: item.task.id,
+                                title: item.task.title,
+                                lifeAreaId: item.task.lifeAreaId,
+                                estimatedMinutes: item.task.durationMinutes,
+                              }}
+                              lifeAreas={timeline.lifeAreas}
+                            />
+                            <DeleteTaskButton
+                              taskId={item.task.id}
+                              taskTitle={item.task.title}
+                            />
                             <RescheduleTaskModal
                               taskId={item.task.id}
                               taskTitle={item.task.title}
