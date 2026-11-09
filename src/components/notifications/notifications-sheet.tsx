@@ -141,14 +141,17 @@ export function NotificationsSheet({
           ) : (
             <div className="space-y-2.5">
               {notifications.map((notif) => {
-                const isPending = notif.status === "DELIVERED";
+                const isActionable =
+                  (notif.status === "DELIVERED" ||
+                    notif.status === "SUPPRESSED_QUIET_HOURS") &&
+                  !notif.responseValue;
                 const isDismissing = dismissingId === notif.id;
 
                 return (
                   <div
                     key={notif.id}
                     className={`flex items-start justify-between gap-3 p-3.5 rounded-2xl border transition-all ${
-                      isPending
+                      isActionable
                         ? "bg-primary/5 border-primary/20 shadow-xs"
                         : "bg-base-100 border-base-200/80 opacity-75"
                     }`}
@@ -157,12 +160,16 @@ export function NotificationsSheet({
                       <div className="flex items-center gap-2">
                         <span
                           className={`badge badge-xs font-semibold ${
-                            isPending
+                            isActionable
                               ? "badge-secondary"
                               : "badge-ghost text-base-content/50"
                           }`}
                         >
-                          {isPending ? "Action needed" : notif.status.toLowerCase()}
+                          {isActionable
+                            ? notif.status === "SUPPRESSED_QUIET_HOURS"
+                              ? "Quiet check-in"
+                              : "Action needed"
+                            : notif.status.toLowerCase()}
                         </span>
                         <p className="text-sm font-semibold text-base-content truncate">
                           {notif.title}
@@ -180,7 +187,7 @@ export function NotificationsSheet({
                         </p>
                       )}
 
-                      {isPending && notif.actionUrl && (
+                      {isActionable && notif.actionUrl && (
                         <div className="pt-2 flex items-center gap-2">
                           <Link
                             href={notif.actionUrl}
@@ -206,7 +213,7 @@ export function NotificationsSheet({
                       )}
                     </div>
 
-                    {!isPending && (
+                    {!isActionable && (
                       <button
                         type="button"
                         disabled={isDismissing}

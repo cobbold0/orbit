@@ -19,6 +19,7 @@ import {
 } from "@/lib/time/timezone";
 import { getPublicVapidKey, sendPushToUserDevices } from "@/lib/push/web-push";
 import { getNowOverviewData } from "@/modules/now/now-service";
+import { syncTaskWorkflowJobsTx } from "@/modules/outbox/outbox-service";
 import {
   confirmTaskCompletion,
   markTaskStarted,
@@ -396,6 +397,67 @@ export async function deliverTaskBackgroundJob(
 }
 
 /**
+ * Ensures all active SCHEDULED tasks have their corresponding BackgroundJob
+ * rows generated for their current scheduleVersion.
+ */
+export async function reconcileScheduledTaskJobs(
+  userId?: string,
+  nowUtc = new Date()
+) {
+  try {
+    const tasks = await prisma.task.findMany({
+      where: {
+        commitmentType: CommitmentType.SCHEDULED,
+        status: { in: [TaskStatus.ACTIVE, TaskStatus.IN_PROGRESS] },
+        scheduledStart: { not: null },
+        scheduledEnd: { not: null },
+        ...(userId ? { userId } : {}),
+      },
+      include: {
+        backgroundJobs: {
+          where: {
+            status: BackgroundJobStatus.SCHEDULED,
+          },
+        },
+        user: {
+          include: {
+            preferences: true,
+          },
+        },
+      },
+      take: 50,
+    });
+
+    for (const t of tasks) {
+      if (!t.scheduledStart || !t.scheduledEnd) continue;
+      const hasActiveJobs = t.backgroundJobs.some(
+        (j) => j.taskScheduleVersion === t.scheduleVersion
+      );
+      if (!hasActiveJobs) {
+        const reminderMin =
+          t.user?.preferences?.defaultPreTaskReminderMin ?? 30;
+        await prisma.$transaction(async (tx) => {
+          await syncTaskWorkflowJobsTx(tx, {
+            userId: t.userId,
+            taskId: t.id,
+            commitmentType: t.commitmentType,
+            status: t.status,
+            scheduleVersion: t.scheduleVersion,
+            scheduledStart: t.scheduledStart,
+            scheduledEnd: t.scheduledEnd,
+            preTaskReminderMinutes: reminderMin,
+            eventReason: "SCHEDULED",
+            nowUtc,
+          });
+        });
+      }
+    }
+  } catch {
+    // Non-fatal reconciliation
+  }
+}
+
+/**
  * Sweeps due SCHEDULED BackgroundJob rows (used by both Inngest cron and local dev).
  */
 export async function evaluateDueBackgroundJobs(options?: {
@@ -404,6 +466,10 @@ export async function evaluateDueBackgroundJobs(options?: {
   limit?: number;
 }) {
   const now = options?.nowUtc ?? new Date();
+
+  // Reconcile any scheduled tasks missing background jobs
+  await reconcileScheduledTaskJobs(options?.userId, now);
+
   const dueJobs = await prisma.backgroundJob.findMany({
     where: {
       status: BackgroundJobStatus.SCHEDULED,

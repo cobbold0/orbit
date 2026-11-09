@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Check, ChevronLeft, ChevronRight, MapPin } from "lucide-react";
+import { ChevronLeft, ChevronRight, MapPin } from "lucide-react";
 import { getCurrentUser } from "@/lib/auth/session";
 import {
   getUnifiedTimelineData,
@@ -10,10 +10,9 @@ import { AreaDot, AreaLabel, Card, PageHeader } from "@/components/ui/page";
 import { RescheduleTaskModal } from "@/components/modals/reschedule-task-modal";
 import { EditTaskModal } from "@/components/modals/edit-task-modal";
 import { DeleteTaskButton } from "@/components/modals/delete-task-button";
+import { CompleteTaskButton } from "@/components/modals/complete-task-button";
 import { ScheduleWindowModal } from "@/components/modals/schedule-window-modal";
-import { ActionSubmitButton } from "@/components/ui/action-button";
 import { formatDuration, formatLongDate } from "@/lib/time/format";
-import { completeTaskAction } from "@/app/actions/orbit-actions";
 import { prisma } from "@/lib/db/prisma";
 import { getShellBadgeCounts } from "@/lib/shell-data";
 
@@ -238,18 +237,10 @@ export default async function TimelinePage({ searchParams }: TimelinePageProps) 
                               taskTitle={item.task.title}
                               className="btn btn-ghost btn-sm btn-square text-error hover:bg-error/10"
                             />
-                            <form action={completeTaskAction}>
-                              <input
-                                type="hidden"
-                                name="taskId"
-                                value={item.task.id}
-                              />
-                              <ActionSubmitButton
-                                className="btn btn-ghost btn-sm btn-square text-success hover:bg-success/10"
-                                ariaLabel={`Done ${item.task.title}`}
-                                icon={<Check className="h-4 w-4" aria-hidden="true" />}
-                              />
-                            </form>
+                            <CompleteTaskButton
+                              taskId={item.task.id}
+                              taskTitle={item.task.title}
+                            />
                           </div>
                         )}
                       </div>

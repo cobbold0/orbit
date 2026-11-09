@@ -1,7 +1,6 @@
 import Link from "next/link";
 import {
   ArrowRight,
-  Check,
   MapPin,
   Play,
 } from "lucide-react";
@@ -14,6 +13,7 @@ import { AreaLabel, Card } from "@/components/ui/page";
 import { RescheduleTaskModal } from "@/components/modals/reschedule-task-modal";
 import { EditTaskModal } from "@/components/modals/edit-task-modal";
 import { DeleteTaskButton } from "@/components/modals/delete-task-button";
+import { CompleteTaskButton } from "@/components/modals/complete-task-button";
 import { LogActivityModal } from "@/components/modals/activity-modals";
 import { ActionSubmitButton } from "@/components/ui/action-button";
 import {
@@ -24,7 +24,6 @@ import {
   formatShortDate,
 } from "@/lib/time/format";
 import {
-  completeTaskAction,
   recoverOrRescheduleTaskAction,
   resolveInferredActivityAction,
   respondToNotificationAction,
@@ -301,15 +300,12 @@ export default async function TodayPage() {
                   </p>
                 </div>
                 <div className="orbit-row-actions">
-                  <form action={completeTaskAction}>
-                    <input type="hidden" name="taskId" value={task.id} />
-                    <ActionSubmitButton
-                      className="btn btn-primary btn-sm"
-                      icon={<Check className="h-4 w-4" aria-hidden="true" />}
-                    >
-                      Completed
-                    </ActionSubmitButton>
-                  </form>
+                  <CompleteTaskButton
+                    taskId={task.id}
+                    taskTitle={task.title}
+                    className="btn btn-primary btn-sm"
+                    label="Completed"
+                  />
                   <form action={recoverOrRescheduleTaskAction}>
                     <input type="hidden" name="taskId" value={task.id} />
                     <input
@@ -434,14 +430,10 @@ export default async function TodayPage() {
                       taskTitle={task.title}
                       className="btn btn-ghost btn-sm btn-square text-error hover:bg-error/10"
                     />
-                    <form action={completeTaskAction}>
-                      <input type="hidden" name="taskId" value={task.id} />
-                      <ActionSubmitButton
-                        className="btn btn-ghost btn-sm btn-square text-success hover:bg-success/10"
-                        ariaLabel={`Done ${task.title}`}
-                        icon={<Check className="h-4 w-4" aria-hidden="true" />}
-                      />
-                    </form>
+                    <CompleteTaskButton
+                      taskId={task.id}
+                      taskTitle={task.title}
+                    />
                   </div>
                 </div>
               );
@@ -517,14 +509,10 @@ export default async function TodayPage() {
                       icon={<Play className="h-4 w-4" aria-hidden="true" />}
                     />
                   </form>
-                  <form action={completeTaskAction}>
-                    <input type="hidden" name="taskId" value={task.id} />
-                    <ActionSubmitButton
-                      className="btn btn-ghost btn-sm btn-square text-success hover:bg-success/10"
-                      ariaLabel={`Mark ${task.title} done`}
-                      icon={<Check className="h-4 w-4" aria-hidden="true" />}
-                    />
-                  </form>
+                  <CompleteTaskButton
+                    taskId={task.id}
+                    taskTitle={task.title}
+                  />
                 </div>
               </div>
             ))}
@@ -593,14 +581,10 @@ export default async function TodayPage() {
                       taskTitle={task.title}
                       className="btn btn-ghost btn-sm btn-square text-error hover:bg-error/10"
                     />
-                    <form action={completeTaskAction}>
-                      <input type="hidden" name="taskId" value={task.id} />
-                      <ActionSubmitButton
-                        className="btn btn-ghost btn-sm btn-square text-success hover:bg-success/10"
-                        ariaLabel={`Done ${task.title}`}
-                        icon={<Check className="h-4 w-4" aria-hidden="true" />}
-                      />
-                    </form>
+                    <CompleteTaskButton
+                      taskId={task.id}
+                      taskTitle={task.title}
+                    />
                   </div>
                 </div>
               ))}
@@ -637,14 +621,10 @@ export default async function TodayPage() {
                       taskTitle={task.title}
                       className="btn btn-ghost btn-sm btn-square text-error hover:bg-error/10"
                     />
-                    <form action={completeTaskAction}>
-                      <input type="hidden" name="taskId" value={task.id} />
-                      <ActionSubmitButton
-                        className="btn btn-ghost btn-sm btn-square text-success hover:bg-success/10"
-                        ariaLabel={`Done ${task.title}`}
-                        icon={<Check className="h-4 w-4" aria-hidden="true" />}
-                      />
-                    </form>
+                    <CompleteTaskButton
+                      taskId={task.id}
+                      taskTitle={task.title}
+                    />
                   </div>
                 </div>
               ))}

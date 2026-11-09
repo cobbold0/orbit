@@ -42,6 +42,7 @@ import { ExpandableFab } from "./expandable-fab";
 import { QuickVoiceDialog } from "./quick-voice-dialog";
 import { PwaInstallBanner } from "./pwa-install-banner";
 import { NotificationsSheet } from "@/components/notifications/notifications-sheet";
+import { NotificationSync } from "@/components/notifications/notification-sync";
 
 export interface ShellLifeArea {
   id: string;
@@ -155,6 +156,11 @@ export function OrbitShell({
   const [areaId, setAreaId] = useState<string>("");
   const [isVoiceOpen, setIsVoiceOpen] = useState(false);
   const [logDuration, setLogDuration] = useState("45");
+  const [liveUnreadCount, setLiveUnreadCount] = useState(unreadCheckInCount);
+
+  useEffect(() => {
+    setLiveUnreadCount(unreadCheckInCount);
+  }, [unreadCheckInCount]);
 
   const openCapture = useCallback(
     (options?: OpenCaptureOptions) => {
@@ -258,7 +264,7 @@ export function OrbitShell({
           </nav>
 
           <div className="mt-auto border-t border-base-300/70 pt-3 space-y-1">
-            <NotificationsSheet unreadCount={unreadCheckInCount} isDesktop />
+            <NotificationsSheet unreadCount={liveUnreadCount} isDesktop />
             {user && (
               <div className="dropdown dropdown-top w-full">
                 <div
@@ -292,9 +298,9 @@ export function OrbitShell({
                         <SlidersHorizontal className="h-4 w-4" />
                         <span>Settings</span>
                       </div>
-                      {unreadCheckInCount > 0 && (
+                      {liveUnreadCount > 0 && (
                         <span className="badge badge-sm badge-secondary tabular">
-                          {unreadCheckInCount}
+                          {liveUnreadCount}
                         </span>
                       )}
                     </Link>
@@ -330,7 +336,7 @@ export function OrbitShell({
               </Link>
             </div>
             <div className="navbar-end flex items-center gap-2">
-              <NotificationsSheet unreadCount={unreadCheckInCount} />
+              <NotificationsSheet unreadCount={liveUnreadCount} />
               {user && (
                 <Link
                   href="/settings?tab=account"
@@ -846,6 +852,8 @@ export function OrbitShell({
           isOpen={isVoiceOpen}
           onClose={() => setIsVoiceOpen(false)}
         />
+        {/* Background In-App Notification Synchronizer & Real-time Alert Engine */}
+        <NotificationSync onUnreadCountChange={setLiveUnreadCount} />
       </div>
     </OrbitCaptureContext.Provider>
   );

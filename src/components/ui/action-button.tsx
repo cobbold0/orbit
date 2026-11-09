@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React from "react";
 import { useFormStatus } from "react-dom";
 
 export interface ActionSubmitButtonProps {
@@ -14,11 +14,11 @@ export interface ActionSubmitButtonProps {
 }
 
 /**
- * ActionSubmitButton provides instant visual feedback and double-tap prevention
- * for Server Action forms.
+ * ActionSubmitButton provides visual feedback and prevents duplicate submissions
+ * during React 19's Server Action lifecycle via `useFormStatus`.
  *
- * It immediately locks the button on click and displays a DaisyUI loading spinner,
- * staying disabled throughout React 19's `useFormStatus` pending lifecycle.
+ * It does not prematurely disable the button during the native click event to avoid
+ * browser cancellation of form submission.
  */
 export function ActionSubmitButton({
   children,
@@ -30,21 +30,14 @@ export function ActionSubmitButton({
   onClick,
 }: ActionSubmitButtonProps) {
   const { pending } = useFormStatus();
-  const [clicked, setClicked] = useState(false);
-
-  const isLocked = pending || clicked || disabled;
+  const isLocked = pending || disabled;
 
   function handleClick(e: React.MouseEvent<HTMLButtonElement>) {
     if (isLocked) {
       e.preventDefault();
       return;
     }
-    setClicked(true);
     onClick?.(e);
-    // Safety unlock after 3s if request network errors out without unmounting
-    setTimeout(() => {
-      setClicked(false);
-    }, 3000);
   }
 
   return (
@@ -55,7 +48,7 @@ export function ActionSubmitButton({
       onClick={handleClick}
       className={className}
     >
-      {isLocked ? (
+      {pending ? (
         <span
           className="loading loading-spinner loading-xs shrink-0"
           aria-hidden="true"
@@ -64,7 +57,7 @@ export function ActionSubmitButton({
         icon
       )}
       {children && (
-        <span>{isLocked && pendingLabel ? pendingLabel : children}</span>
+        <span>{pending && pendingLabel ? pendingLabel : children}</span>
       )}
     </button>
   );

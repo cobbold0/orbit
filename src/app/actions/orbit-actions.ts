@@ -58,6 +58,7 @@ import type {
 import { resolveLocalDateTimeToUtc } from "@/lib/time/timezone";
 import { prisma } from "@/lib/db/prisma";
 import {
+  evaluateDueBackgroundJobs,
   generateMorningBriefingForUser,
   generateRandomActivityCheckIn,
   generateTaskCheckInSample,
@@ -1326,6 +1327,8 @@ export async function getRecentCheckInsAction(): Promise<{
   createdAt: string;
 }[]> {
   const userId = await requireUserId();
+  await evaluateDueBackgroundJobs({ userId, limit: 20 });
+
   const notifs = await prisma.notification.findMany({
     where: { userId },
     orderBy: { createdAt: "desc" },
@@ -1341,6 +1344,55 @@ export async function getRecentCheckInsAction(): Promise<{
     responseValue: n.responseValue,
     createdAt: n.createdAt.toISOString(),
   }));
+}
+
+export async function syncAndCheckNotificationsAction(
+  lastDeliveredIso?: string
+): Promise<{
+  unreadCount: number;
+  newlyDelivered: Array<{
+    id: string;
+    title: string;
+    body: string;
+    actionUrl: string;
+    createdAt: string;
+  }>;
+}> {
+  const userId = await requireUserId();
+  await evaluateDueBackgroundJobs({ userId, limit: 20 });
+
+  const unreadCount = await prisma.notification.count({
+    where: {
+      userId,
+      status: NotificationDeliveryStatus.DELIVERED,
+      responseValue: null,
+    },
+  });
+
+  const since = lastDeliveredIso
+    ? new Date(lastDeliveredIso)
+    : new Date(Date.now() - 35_000);
+
+  const newlyDelivered = await prisma.notification.findMany({
+    where: {
+      userId,
+      status: NotificationDeliveryStatus.DELIVERED,
+      deliveredAt: { gt: since },
+    },
+    orderBy: { deliveredAt: "desc" },
+    take: 3,
+  });
+
+  return {
+    unreadCount,
+    newlyDelivered: newlyDelivered.map((n) => ({
+      id: n.id,
+      title: n.title,
+      body: n.body,
+      actionUrl: n.actionUrl,
+      createdAt: n.createdAt.toISOString(),
+    })),
+  };
 }
 
 export async function dismissNotificationAction(formData: FormData) {

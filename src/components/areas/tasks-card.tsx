@@ -2,14 +2,11 @@
 
 import React, { useState } from "react";
 import Link from "next/link";
-import { Check } from "lucide-react";
-import { completeTaskAction } from "@/app/actions/orbit-actions";
 import { AreaLabel, Card } from "@/components/ui/page";
 import { RescheduleTaskModal } from "@/components/modals/reschedule-task-modal";
 import { EditTaskModal } from "@/components/modals/edit-task-modal";
 import { DeleteTaskButton } from "@/components/modals/delete-task-button";
-import { ActionSubmitButton } from "@/components/ui/action-button";
-import { useOrbitToast } from "@/components/ui/orbit-toast";
+import { CompleteTaskButton } from "@/components/modals/complete-task-button";
 import { formatDuration } from "@/lib/time/format";
 
 export interface AreaTaskRowItem {
@@ -46,7 +43,6 @@ export function TasksCard({
   headerAction?: React.ReactNode;
 }) {
   const [tab, setTab] = useState<TabFilter>("ALL");
-  const { notify } = useOrbitToast();
 
   const openTasks = tasks.filter((t) => t.status !== "COMPLETED");
   const counts = {
@@ -152,19 +148,10 @@ export function TasksCard({
                   taskTitle={task.title}
                   className="btn btn-ghost btn-sm btn-square text-error hover:bg-error/10"
                 />
-                <form
-                  action={async (formData) => {
-                    await completeTaskAction(formData);
-                    notify("Task marked done");
-                  }}
-                >
-                  <input type="hidden" name="taskId" value={task.id} />
-                  <ActionSubmitButton
-                    className="btn btn-ghost btn-sm btn-square text-success hover:bg-success/10"
-                    ariaLabel={`Done ${task.title}`}
-                    icon={<Check className="h-4 w-4" aria-hidden="true" />}
-                  />
-                </form>
+                <CompleteTaskButton
+                  taskId={task.id}
+                  taskTitle={task.title}
+                />
               </div>
             </div>
           ))}

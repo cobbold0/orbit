@@ -40,12 +40,27 @@ export function buildTaskReminderPlan(input: {
       scheduledFor: preReminderAt,
       idempotencyKey: `task:${input.taskId}:v${input.scheduleVersion}:PRE_TASK_REMINDER`,
     });
+  } else if (input.scheduledStart.getTime() > now.getTime() + 60 * 1000) {
+    // If scheduled within the reminder window (e.g. starting in 15 mins),
+    // trigger the pre-task reminder immediately so the user isn't left without any reminder.
+    jobs.push({
+      kind: BackgroundJobKind.PRE_TASK_REMINDER,
+      scheduledFor: now,
+      idempotencyKey: `task:${input.taskId}:v${input.scheduleVersion}:PRE_TASK_REMINDER`,
+    });
   }
 
   if (input.scheduledStart.getTime() >= now.getTime() - 60 * 1000) {
     jobs.push({
       kind: BackgroundJobKind.TASK_START_CONFIRMATION,
       scheduledFor: input.scheduledStart,
+      idempotencyKey: `task:${input.taskId}:v${input.scheduleVersion}:TASK_START_CONFIRMATION`,
+    });
+  } else if (input.scheduledEnd.getTime() > now.getTime()) {
+    // Task scheduled start has just elapsed, but execution window is still active
+    jobs.push({
+      kind: BackgroundJobKind.TASK_START_CONFIRMATION,
+      scheduledFor: now,
       idempotencyKey: `task:${input.taskId}:v${input.scheduleVersion}:TASK_START_CONFIRMATION`,
     });
   }

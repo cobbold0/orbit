@@ -175,6 +175,9 @@ export function evaluateNotificationDeliveryPolicy(
 
   if (
     category !== NotificationCategory.MORNING_BRIEFING &&
+    category !== NotificationCategory.PRE_COMMITMENT_CHECKIN &&
+    category !== NotificationCategory.START_CONFIRMATION &&
+    category !== NotificationCategory.END_CONFIRMATION &&
     ctx.deliveredTodayCount >= pref.maxDailyCheckIns
   ) {
     return {
