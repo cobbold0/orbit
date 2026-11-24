@@ -227,7 +227,7 @@ export default async function VisualsPage() {
         email: user.email,
       }}
     >
-      <div className="w-full h-[calc(100dvh-70px)] p-1 sm:p-2">
+      <div className="w-full h-full p-0 m-0 overflow-hidden">
         {/* Miro-Style Infinite Canvas filling entire screen */}
         <MiroStreamCanvas
           initialNodes={nodes}

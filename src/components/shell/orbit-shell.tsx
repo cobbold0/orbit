@@ -354,9 +354,13 @@ export function OrbitShell({
           <main
             id="main-content"
             tabIndex={-1}
-            className="mx-auto w-full max-w-5xl min-w-0 flex-1 px-4 pb-24 pt-5 outline-none sm:px-8 md:pb-16 md:pt-10"
+            className={
+              pathname === "/visuals"
+                ? "w-full min-w-0 flex-1 h-[calc(100dvh-56px)] md:h-screen p-0 m-0 overflow-hidden outline-none"
+                : "mx-auto w-full max-w-5xl min-w-0 flex-1 px-4 pb-24 pt-5 outline-none sm:px-8 md:pb-16 md:pt-10"
+            }
           >
-            <PwaInstallBanner />
+            {pathname !== "/visuals" && <PwaInstallBanner />}
             {children}
           </main>
         </div>
