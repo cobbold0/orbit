@@ -1,8 +1,8 @@
 import Link from "next/link";
 import {
   ArrowRight,
-  LayoutGrid,
   MapPin,
+  Network,
   Play,
 } from "lucide-react";
 import { getCurrentUser } from "@/lib/auth/session";
@@ -15,7 +15,6 @@ import { RescheduleTaskModal } from "@/components/modals/reschedule-task-modal";
 import { EditTaskModal } from "@/components/modals/edit-task-modal";
 import { DeleteTaskButton } from "@/components/modals/delete-task-button";
 import { CompleteTaskButton } from "@/components/modals/complete-task-button";
-import { TaskBoard } from "@/components/board/task-board";
 import { LogActivityModal } from "@/components/modals/activity-modals";
 import { ActionSubmitButton } from "@/components/ui/action-button";
 import {
@@ -136,69 +135,6 @@ export default async function TodayPage() {
     (t) => !flexibleIds.has(t.id)
   );
 
-  const boardTasks = {
-    scheduledToday: data.scheduledToday.map((t) => ({
-      id: t.id,
-      title: t.title,
-      commitmentType: t.commitmentType,
-      status: t.status,
-      lifeArea: {
-        id: t.lifeArea.id,
-        name: t.lifeArea.name,
-        slug: t.lifeArea.slug,
-        colorToken: t.lifeArea.colorToken,
-      },
-      scheduledStart: t.scheduledStart ? t.scheduledStart.toISOString() : null,
-      scheduledEnd: t.scheduledEnd ? t.scheduledEnd.toISOString() : null,
-      timeLabel:
-        t.scheduledStart && t.scheduledEnd
-          ? formatClockRange(t.scheduledStart, t.scheduledEnd, tz)
-          : undefined,
-      estimatedMinutes: t.estimatedMinutes,
-      isCurrentFocus: t.id === data.activeCommitment?.id,
-    })),
-    flexible: data.flexibleTasks.map((t) => ({
-      id: t.id,
-      title: t.title,
-      commitmentType: t.commitmentType,
-      status: t.status,
-      lifeArea: {
-        id: t.lifeArea.id,
-        name: t.lifeArea.name,
-        slug: t.lifeArea.slug,
-        colorToken: t.lifeArea.colorToken,
-      },
-      estimatedMinutes: t.estimatedMinutes,
-    })),
-    waiting: data.waitingTasks.map((t) => ({
-      id: t.id,
-      title: t.title,
-      commitmentType: t.commitmentType,
-      status: t.status,
-      lifeArea: {
-        id: t.lifeArea.id,
-        name: t.lifeArea.name,
-        slug: t.lifeArea.slug,
-        colorToken: t.lifeArea.colorToken,
-      },
-      waitingOnPerson: t.waitingOnPerson,
-      waitingOnCondition: t.waitingOnCondition,
-    })),
-    completedToday: data.completedTodayTasks.map((t) => ({
-      id: t.id,
-      title: t.title,
-      commitmentType: t.commitmentType,
-      status: t.status,
-      lifeArea: {
-        id: t.lifeArea.id,
-        name: t.lifeArea.name,
-        slug: t.lifeArea.slug,
-        colorToken: t.lifeArea.colorToken,
-      },
-      estimatedMinutes: t.estimatedMinutes,
-    })),
-  };
-
   return (
     <OrbitShell
       lifeAreas={data.lifeAreas}
@@ -298,6 +234,13 @@ export default async function TodayPage() {
                   {flexibleCount} flexible
                 </span>
               )}
+              <Link
+                href="/visuals"
+                className="badge badge-sm badge-outline gap-1.5 hover:badge-neutral transition-all ml-auto"
+              >
+                <Network className="h-3 w-3" />
+                <span>Visual Canvas &rarr;</span>
+              </Link>
             </div>
           </div>
         </section>
@@ -403,22 +346,6 @@ export default async function TodayPage() {
             ))}
           </Card>
         )}
-
-        {/* Visual Workspace Board */}
-        <section aria-label="Visual Workspace Board" className="space-y-3">
-          <div className="flex items-center justify-between px-1">
-            <div className="flex items-center gap-2">
-              <LayoutGrid className="h-4 w-4 text-primary" />
-              <h2 className="text-base font-bold tracking-tight text-base-content">
-                Visual Workspace Board
-              </h2>
-            </div>
-            <span className="text-xs text-base-content/50">
-              Visual lanes &bull; Move tasks freely
-            </span>
-          </div>
-          <TaskBoard tasks={boardTasks} timeZone={tz} />
-        </section>
 
         {/* Today's Schedule & Commitments */}
         <Card

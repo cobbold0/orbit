@@ -1,5 +1,4 @@
 import { redirect } from "next/navigation";
-import { Network } from "lucide-react";
 import { TaskStatus } from "@prisma/client";
 import { getCurrentUser } from "@/lib/auth/session";
 import { prisma } from "@/lib/db/prisma";
@@ -228,23 +227,8 @@ export default async function VisualsPage() {
         email: user.email,
       }}
     >
-      <div className="page space-y-4">
-        {/* Header Bar */}
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <div className="flex items-center gap-2">
-              <Network className="h-5 w-5 text-primary" />
-              <h1 className="text-2xl font-bold tracking-tight text-base-content">
-                Visual Stream Canvas
-              </h1>
-            </div>
-            <p className="meta text-xs sm:text-sm mt-0.5">
-              Infinite canvas mapping your life streams &bull; Drag cards, pan freely, and trace dependencies
-            </p>
-          </div>
-        </div>
-
-        {/* Miro-Style Infinite Canvas */}
+      <div className="w-full h-[calc(100dvh-70px)] p-1 sm:p-2">
+        {/* Miro-Style Infinite Canvas filling entire screen */}
         <MiroStreamCanvas
           initialNodes={nodes}
           initialEdges={edges}

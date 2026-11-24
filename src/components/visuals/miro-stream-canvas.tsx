@@ -185,7 +185,7 @@ export function MiroStreamCanvas({
   }, [initialEdges, visibleNodeMap]);
 
   return (
-    <div className="relative w-full h-[calc(100vh-140px)] min-h-[640px] rounded-3xl border border-base-300/80 bg-white overflow-hidden shadow-xs select-none">
+    <div className="relative w-full h-full min-h-[680px] rounded-2xl border border-base-300/80 bg-white overflow-hidden shadow-xs select-none">
       {/* Top Floating Control Bar */}
       <div className="absolute top-4 left-4 right-4 z-20 flex flex-wrap items-center justify-between gap-3 pointer-events-none">
         {/* Stream Filter Pills */}
