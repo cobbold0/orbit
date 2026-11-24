@@ -19,6 +19,7 @@ import {
   Layers,
   LogOut,
   MoreVertical,
+  Network,
   Plus,
   SlidersHorizontal,
   User,
@@ -117,6 +118,7 @@ interface OrbitShellProps {
 
 const NAV_ITEMS = [
   { href: "/", label: "Today", icon: CalendarCheck },
+  { href: "/visuals", label: "Visuals", icon: Network },
   { href: "/timeline", label: "Timeline", icon: CalendarRange },
   { href: "/areas", label: "Areas", icon: Layers },
   { href: "/routines", label: "Activity", icon: History },
