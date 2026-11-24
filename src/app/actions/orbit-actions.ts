@@ -325,6 +325,52 @@ export async function recoverOrRescheduleTaskAction(formData: FormData) {
   revalidateAllOrbitViews();
 }
 
+export async function moveTaskLaneAction(formData: FormData) {
+  const userId = await requireUserId();
+  const taskId = String(formData.get("taskId") ?? "");
+  const targetLane = String(formData.get("targetLane") ?? "").toUpperCase();
+  if (!taskId || !targetLane) return;
+
+  const task = await prisma.task.findFirst({ where: { id: taskId, userId } });
+  if (!task) return;
+
+  const now = new Date();
+
+  if (targetLane === "COMPLETED") {
+    await confirmTaskCompletion(userId, taskId);
+  } else if (targetLane === "TODAY") {
+    const dur = task.estimatedMinutes ?? 45;
+    const newEnd = new Date(now.getTime() + dur * 60 * 1000);
+    await rescheduleOrChangeCommitment(userId, taskId, {
+      newCommitmentType: CommitmentType.SCHEDULED,
+      newStart: now,
+      newEnd,
+      reason: ScheduleChangeReason.USER_RESCHEDULED,
+      note: "Moved to today on visual board",
+    });
+  } else if (targetLane === "FLEXIBLE") {
+    await rescheduleOrChangeCommitment(userId, taskId, {
+      newCommitmentType: CommitmentType.FLEXIBLE,
+      flexibilityWindow: "THIS_WEEK",
+      reason: ScheduleChangeReason.MOVED_TO_FLEXIBLE,
+      note: "Moved to flexible pool on visual board",
+    });
+  } else if (targetLane === "WAITING") {
+    const person =
+      String(formData.get("waitingOnPerson") ?? "External dependency").trim() ||
+      "Pending partner";
+    await prisma.task.update({
+      where: { id: taskId },
+      data: {
+        commitmentType: CommitmentType.WAITING,
+        waitingOnPerson: person,
+      },
+    });
+  }
+
+  revalidateAllOrbitViews();
+}
+
 export async function createLifeAreaAction(formData: FormData) {
   const userId = await requireUserId();
   const name = String(formData.get("name") ?? "").trim();

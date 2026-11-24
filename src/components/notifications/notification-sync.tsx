@@ -3,6 +3,7 @@
 import { useEffect, useRef } from "react";
 import { syncAndCheckNotificationsAction } from "@/app/actions/orbit-actions";
 import { useOrbitToast } from "@/components/ui/orbit-toast";
+import { playAlarmChime } from "./alarm-sound";
 
 export interface NotificationSyncProps {
   onUnreadCountChange?: (count: number) => void;
@@ -35,8 +36,11 @@ export function NotificationSync({ onUnreadCountChange }: NotificationSyncProps)
             seenIdsRef.current.add(item.id);
             lastDeliveredRef.current = item.createdAt;
 
+            // Audible alarm chime for commitments and check-ins
+            playAlarmChime();
+
             // In-app alert
-            notify(`🔔 ${item.title} — ${item.body}`);
+            notify(`🔔 ${item.title}: ${item.body}`);
 
             // Haptic feedback if available on mobile
             if (typeof navigator !== "undefined" && "vibrate" in navigator) {

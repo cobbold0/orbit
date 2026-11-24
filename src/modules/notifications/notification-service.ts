@@ -6,6 +6,7 @@ import {
   CommitmentType,
   NotificationCategory,
   NotificationDeliveryStatus,
+  RoutineState,
   ScheduleChangeReason,
   TaskStatus,
 } from "@prisma/client";
@@ -644,13 +645,96 @@ export async function generateRandomActivityCheckIn(
     return { created: false, notification: existing, reason: "ALREADY_SENT" };
   }
 
+  // Inspect user's actual routines, active tasks, and recent check-ins for context
+  const nowInstant = Temporal.Instant.fromEpochMilliseconds(
+    nowUtc.getTime()
+  ).toZonedDateTimeISO(pref.ianaTimeZone);
+  const isoDay = nowInstant.dayOfWeek;
+
+  const [todayOccurrence, activeDayRoutine, upcomingTask, unrepliedRecent] =
+    await Promise.all([
+      prisma.routineOccurrence.findFirst({
+        where: {
+          occurrenceDate: deliveryCtx.localDate,
+          routine: { userId },
+        },
+        include: { routine: true },
+      }),
+      prisma.routine.findFirst({
+        where: {
+          userId,
+          state: RoutineState.DECLARED,
+          daysOfWeek: { has: isoDay },
+        },
+      }),
+      prisma.task.findFirst({
+        where: {
+          userId,
+          status: { in: [TaskStatus.ACTIVE, TaskStatus.IN_PROGRESS] },
+          scheduledStart: {
+            gte: nowUtc,
+            lte: new Date(nowUtc.getTime() + 2 * 60 * 60 * 1000),
+          },
+        },
+        include: { lifeArea: true },
+        orderBy: { scheduledStart: "asc" },
+      }),
+      prisma.notification.findFirst({
+        where: {
+          userId,
+          category: NotificationCategory.RANDOM_CHECKIN,
+          status: NotificationDeliveryStatus.DELIVERED,
+          deliveredAt: {
+            gte: new Date(nowUtc.getTime() - 4 * 60 * 60 * 1000),
+          },
+        },
+        orderBy: { deliveredAt: "desc" },
+      }),
+    ]);
+
+  let title = "Quick check-in";
+  let body = "Checking in on your day: what priority has your focus right now?";
+  const promptKind: CheckInMetadataPayload["promptKind"] = "ACTIVITY";
+  let optionsList: CheckInOptionItem[] = [
+    { value: "LOG_WORK", label: "Log work", tone: "primary" },
+    { value: "DISMISS", label: "Skip for now", tone: "ghost" },
+  ];
+
+  const targetRoutine = todayOccurrence?.routine ?? activeDayRoutine;
+  const locationName =
+    targetRoutine?.physicalLocation ||
+    (targetRoutine?.title.toLowerCase().includes("office") ||
+    targetRoutine?.title.toLowerCase().includes("basilissa")
+      ? targetRoutine.title
+      : null);
+
+  if (locationName) {
+    title = `${locationName} check-in`;
+    body = `Hey, you are scheduled for ${locationName} today. Are you heading there or already on-site?`;
+    optionsList = [
+      { value: "LOG_WORK", label: "I'm on-site / working", tone: "primary" as const },
+      { value: "DISMISS", label: "Heading there / skip", tone: "ghost" as const },
+    ];
+  } else if (upcomingTask && upcomingTask.scheduledStart) {
+    title = `Upcoming: ${upcomingTask.title}`;
+    body = `Starting at ${formatTimeInZone(
+      upcomingTask.scheduledStart,
+      pref.ianaTimeZone
+    )}. Ready to dive in?`;
+    optionsList = [
+      { value: "STARTED", label: "Start now", tone: "primary" as const },
+      { value: "SNOOZE_15M", label: "+15m", tone: "secondary" as const },
+      { value: "DISMISS", label: "Skip for now", tone: "ghost" as const },
+    ];
+  } else if (unrepliedRecent) {
+    title = "Gentle follow-up";
+    body = "Following up from earlier: did your focus shift, or are you still in the flow?";
+  }
+
   const notifId = makeNotificationId();
   const metadata: CheckInMetadataPayload = {
-    promptKind: "ACTIVITY",
-    options: [
-      { value: "LOG_WORK", label: "Log work", tone: "primary" },
-      { value: "DISMISS", label: "Skip for now", tone: "ghost" },
-    ],
+    promptKind,
+    options: optionsList,
   };
 
   const notification = await prisma.notification.create({
@@ -658,8 +742,8 @@ export async function generateRandomActivityCheckIn(
       id: notifId,
       userId,
       category: NotificationCategory.RANDOM_CHECKIN,
-      title: "Quick check-in",
-      body: "What are you working on right now?",
+      title,
+      body,
       actionUrl: `/check-in/${notifId}`,
       metadata: metadata as unknown as object,
       idempotencyKey,

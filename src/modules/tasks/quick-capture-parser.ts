@@ -36,6 +36,12 @@ export function parseQuickCaptureInput(
 ): ParsedQuickCapture {
   let working = rawInput.trim();
 
+  // Normalize phonetic mishearings from speech-to-text (e.g. Basilica -> Basilissa)
+  working = working.replace(
+    /\b(?:basilica|bacilissa|basilisa|basillica|bacilica)\b/gi,
+    "Basilissa"
+  );
+
   // Strip polite prefixes like "Remind me to ", "I need to ", "Please "
   working = working.replace(/^(?:remind me to|i need to|please|todo:?)\s+/i, "");
 

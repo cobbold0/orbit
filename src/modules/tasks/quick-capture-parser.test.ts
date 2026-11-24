@@ -58,4 +58,17 @@ describe("Deterministic Quick Capture Parser", () => {
     expect(parsed.waitingOnCondition).toBe("attendance API credentials");
     expect(parsed.lifeAreaId).toBe("area_basilissa");
   });
+
+  it("phonetically maps speech mishearings like 'Basilica' to 'Basilissa'", () => {
+    const parsed = parseQuickCaptureInput(
+      "Remind me that I will be working at Basilica tomorrow morning",
+      mockAreas,
+      "Africa/Lagos",
+      refUtc
+    );
+
+    expect(parsed.title).toContain("Basilissa");
+    expect(parsed.lifeAreaId).toBe("area_basilissa");
+    expect(parsed.commitmentType).toBe(CommitmentType.SCHEDULED);
+  });
 });

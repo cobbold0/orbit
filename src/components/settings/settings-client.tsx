@@ -22,6 +22,7 @@ import {
 import { AreaLabel, Card, PageHeader } from "@/components/ui/page";
 import { OrbitModal, SubmitButton } from "@/components/ui/orbit-modal";
 import { useOrbitToast } from "@/components/ui/orbit-toast";
+import { playAlarmChime } from "@/components/notifications/alarm-sound";
 
 export interface SettingsPreferenceShape {
   ianaTimeZone: string;
@@ -192,6 +193,7 @@ export function SettingsClient({
   ) {
     setTriggeringKind(kind);
     try {
+      playAlarmChime();
       const res = await triggerProactiveCheckInAction(kind);
       testModalRef.current?.close();
       notify(res.message, res.ok ? "success" : "error");

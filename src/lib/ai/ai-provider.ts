@@ -71,7 +71,11 @@ export class DeterministicFallbackProvider implements AIProvider {
     speakerContext: string | null,
     userContext: UserOrbitContext
   ): Promise<MemoryExtractionResult> {
-    const clauses = rawContent
+    const sanitizedRaw = rawContent.replace(
+      /\b(?:basilica|bacilissa|basilisa|basillica|bacilica)\b/gi,
+      "Basilissa"
+    );
+    const clauses = sanitizedRaw
       .split(/(?<=[.!?])\s+|\n+|;\s+|\s+and\s+(?=(?:contact|prepare|present|noted|mentioned|we\s+need|we\s+agreed))/i)
       .map((s) => s.trim())
       .filter((s) => s.length >= 6);
@@ -1008,10 +1012,12 @@ CRITICAL PRODUCT RULES:
    - "IDEA_PROPOSED": Merely proposed as an idea.
    - "MENTIONED_ONLY": Casually mentioned in conversation (do NOT turn into a task).
    - "ALREADY_COMPLETED": Already finished in the past.
-3. Preserve an exact "sourceQuote" substring from the raw note for every item.
-4. Available Life Area slugs: ${areasContext}
-5. Available Projects: ${projectsContext}
-6. Speaker / Meeting Context: ${speakerContext ?? "None"}
+3. PHONETIC & SPEECH CORRECTIONS:
+   - "Basilica", "Bacilissa", "Basilisa", "Basillica" -> Refers to "Basilissa" (life area: basilissa / physical location: Basilissa Office). Always normalize to "Basilissa" in extracted task titles, locations, and life area mappings.
+4. Preserve an exact "sourceQuote" substring from the raw note for every item.
+5. Available Life Area slugs: ${areasContext}
+6. Available Projects: ${projectsContext}
+7. Speaker / Meeting Context: ${speakerContext ?? "None"}
 
 Return ONLY valid JSON matching:
 {
@@ -1093,7 +1099,10 @@ CRITICAL SAFETY & GROUNDING RULES:
 3. Distinguish confirmed facts ("citedFacts") from recommendations or suggestions ("assumptionsOrSuggestions").
 4. Physical location, employer, active project, and availability are independent.
 5. Use short, direct, natural sentences. Never use double dashes (--) or em-dashes.
-6. CHRONOLOGICAL, CALENDAR & SCHEDULE INTELLIGENCE:
+6. PHONETIC & SPEECH CORRECTIONS:
+   - "Basilica", "Bacilissa", "Basilisa", "Basillica" refers to "Basilissa" (life area: Basilissa / physical location: Basilissa Office). Always normalize this in proposed tasks, routines, and answers.
+   - "Everlyx", "Everlix" refers to "Everlyx".
+7. CHRONOLOGICAL, CALENDAR & SCHEDULE INTELLIGENCE:
    Orbit has rich multi-horizon time intelligence:
    a. Specific Query Date ("queriedDateSchedule"):
       When the user asks about an arbitrary date (e.g. "what will happen on the 24th December?", "what did I do on January 1st, 2024?", "what's happening on Wednesday?"), Orbit inspects "queriedDateSchedule".

@@ -49,6 +49,7 @@ export async function getNowOverviewData(userId: string, nowUtc = new Date()) {
     unreviewedInbox,
     activeCheckIns,
     pendingJobsCount,
+    completedTodayTasks,
   ] = await Promise.all([
     prisma.lifeArea.findMany({
       where: { userId, isArchived: false },
@@ -168,6 +169,16 @@ export async function getNowOverviewData(userId: string, nowUtc = new Date()) {
         status: BackgroundJobStatus.SCHEDULED,
       },
     }),
+    prisma.task.findMany({
+      where: {
+        userId,
+        status: TaskStatus.COMPLETED,
+        updatedAt: { gte: dayBounds.startUtc, lte: dayBounds.endUtc },
+      },
+      include: { lifeArea: true, project: true },
+      orderBy: { updatedAt: "desc" },
+      take: 15,
+    }),
   ]);
 
   // Filter routines that apply to today's ISO day of week
@@ -222,5 +233,6 @@ export async function getNowOverviewData(userId: string, nowUtc = new Date()) {
     unreviewedInbox,
     activeCheckIns,
     pendingJobsCount,
+    completedTodayTasks,
   };
 }
